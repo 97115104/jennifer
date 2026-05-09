@@ -14,7 +14,7 @@ const GithubTool = {
     properties: {
       action: {
         type: 'string',
-        enum: ['get_user', 'list_repos', 'create_repo', 'push_file'],
+        enum: ['get_user', 'list_repos', 'create_repo', 'push_file', 'get_file', 'enable_pages'],
         description: 'Action to perform on GitHub',
       },
       name: {
@@ -131,7 +131,36 @@ const GithubTool = {
         return `File pushed: ${file_path} → https://github.com/${fullRepo}`;
       }
 
-      return `Unknown action: ${action}. Valid actions: get_user, list_repos, create_repo, push_file`;
+      if (action === 'get_file') {
+        if (!repo || !file_path) return 'repo and file_path are required for get_file action';
+        const fullRepo = repo.includes('/') ? repo : `${username}/${repo}`;
+        const r = await axios.get(`${api}/repos/${fullRepo}/contents/${file_path}`, { headers });
+        const content = Buffer.from(r.data.content, 'base64').toString('utf-8');
+        console.log(`[github] Read ${file_path} from ${fullRepo} (${content.length} chars)`);
+        return content;
+      }
+
+      if (action === 'enable_pages') {
+        if (!repo) return 'Repository name is required for enable_pages action';
+        const fullRepo = repo.includes('/') ? repo : `${username}/${repo}`;
+        const r = await axios.post(`${api}/repos/${fullRepo}/pages`, {
+          source: { branch: 'main', path: '/' },
+        }, { headers, validateStatus: () => true });
+
+        if (r.status === 201) {
+          const url = r.data.html_url || `https://${username}.github.io/${fullRepo.split('/')[1]}`;
+          console.log(`[github] Pages enabled: ${url}`);
+          return `Pages enabled: ${url} — live in ~1 minute`;
+        }
+        if (r.status === 409) {
+          const url = `https://${username}.github.io/${fullRepo.split('/')[1]}`;
+          console.log(`[github] Pages already active: ${url}`);
+          return `Pages already enabled: ${url}`;
+        }
+        return `Pages setup failed (HTTP ${r.status}): ${r.data?.message || 'unknown error'}`;
+      }
+
+      return `Unknown action: ${action}. Valid actions: get_user, list_repos, create_repo, push_file, enable_pages`;
     } catch (err) {
       const detail = err.response?.data?.message || err.message;
       console.error(`[github] Error (${action}):`, detail);

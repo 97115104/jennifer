@@ -108,6 +108,48 @@ class InferenceClient {
       return text;
     }
   }
+
+  /**
+   * Pure text generation — no tools, no multi-step reasoning.
+   * The model's only job is to produce content from a prompt.
+   * Used by Pipeline aiGenerate steps.
+   */
+  async generate(prompt, { systemPrompt, maxTokens = 4096, temperature = 0.85 } = {}) {
+    const messages = [];
+    if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+    messages.push({ role: 'user', content: prompt });
+
+    const body = {
+      model: this.model,
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+      // No tools — pure generation
+    };
+
+    console.log(`[inference/generate] → ${prompt.slice(0, 80).replace(/\n/g, ' ')}…`);
+    const t0 = Date.now();
+
+    let response;
+    try {
+      response = await axios.post(`${this.baseUrl}/v1/chat/completions`, body, {
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: config.apiTimeoutMs,
+      });
+    } catch (err) {
+      const status = err.response?.status;
+      const detail = err.response?.data?.error?.message || err.response?.data || err.message;
+      console.error(`[inference/generate] ✗ HTTP ${status || 'network'} error:`, detail);
+      throw new Error(`Generate API error: ${detail}`);
+    }
+
+    const text = response.data.choices[0]?.message?.content || '';
+    console.log(`[inference/generate] ← ${Date.now() - t0}ms, ${text.length} chars`);
+    return text;
+  }
 }
 
 module.exports = InferenceClient;
