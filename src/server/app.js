@@ -169,11 +169,12 @@ function attachWebSocket(server, assistant) {
     };
 
     const handlers = {
-      status: e => send({ type: 'status', ...e }),
-      transcript: e => send({ type: 'transcript', ...e }),
-      response: e => send({ type: 'response', ...e }),
-      tts_progress: e => send({ type: 'tts_progress', ...e }),
-      tool_event: e => send({ type: e.type, ...e }),
+      status:      e => send({ type: 'status', ...e }),
+      transcript:  e => send({ type: 'transcript', ...e }),
+      response:    e => send({ type: 'response', ...e }),
+      tts_progress:e => send({ type: 'tts_progress', ...e }),
+      // tool_event covers: tool_call, tool_result, plan_start, plan_step, plan_step_done, plan_complete
+      tool_event:  e => send({ type: e.type, ...e }),
     };
 
     for (const [event, fn] of Object.entries(handlers)) assistant.on(event, fn);

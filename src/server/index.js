@@ -15,6 +15,7 @@ const MemoryTool = require('../tools/MemoryTool');
 const ReadFileTool = require('../tools/ReadFileTool');
 const WriteFileTool = require('../tools/WriteFileTool');
 const GithubTool = require('../tools/GithubTool');
+const PlannerTool = require('../tools/PlannerTool');
 const Assistant = require('../core/Assistant');
 const Settings = require('../core/Settings');
 
@@ -57,8 +58,12 @@ async function main() {
   tools.register(WriteFileTool);
   tools.register(EmailTool);
   tools.register(GithubTool);
+  tools.register(PlannerTool);   // registered before Assistant so it appears in schemas
 
   const assistant = new Assistant({ sttProvider: stt, ttsProvider: tts, toolRegistry: tools });
+
+  // Inject the inference client into PlannerTool now that it exists (breaks circular dep)
+  PlannerTool.inject(assistant.inference);
   await assistant.initialize();
 
   const app = createApp(assistant);

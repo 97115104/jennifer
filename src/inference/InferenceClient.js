@@ -11,9 +11,13 @@ class InferenceClient {
     this.model = config.apiModel;
   }
 
-  async complete(messages, { onStatus } = {}) {
+  async complete(messages, { onStatus, excludeTools = [] } = {}) {
     const history = [...messages];
-    const tools = this.toolRegistry ? this.toolRegistry.getSchemas() : [];
+    const tools = this.toolRegistry
+      ? (excludeTools.length
+          ? this.toolRegistry.getSchemasExcluding(excludeTools)
+          : this.toolRegistry.getSchemas())
+      : [];
     let round = 0;
 
     while (true) {
@@ -77,7 +81,7 @@ class InferenceClient {
           const t1 = Date.now();
           let result;
           try {
-            result = await this.toolRegistry.execute(name, args);
+            result = await this.toolRegistry.execute(name, args, { onStatus });
           } catch (e) {
             result = `Error executing ${name}: ${e.message}`;
             console.error(`[inference] Tool error (${name}):`, e.message);

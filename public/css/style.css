@@ -332,3 +332,73 @@ h1 {
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ─── Plan block ─────────────────────────────────────────────────────────── */
+
+.plan-block {
+  background: rgba(79,142,247,0.05);
+  border: 1px solid rgba(79,142,247,0.18);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin: 6px 0;
+  width: 100%;
+}
+
+.plan-header {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.plan-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.plan-step {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 0.82rem;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+
+.plan-step:last-child { border-bottom: none; }
+
+.step-icon {
+  font-size: 0.75rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.plan-step.pending  .step-icon::before { content: '○'; color: var(--text-muted); }
+.plan-step.active   .step-icon::before { content: '◉'; color: var(--accent); }
+.plan-step.done     .step-icon::before { content: '●'; color: var(--success); }
+.plan-step.error    .step-icon::before { content: '✕'; color: var(--danger); }
+
+.plan-step.active { color: var(--text); }
+.plan-step.done   { color: var(--text-muted); }
+
+.step-body { display: flex; flex-direction: column; gap: 2px; }
+.step-desc { line-height: 1.35; }
+.step-result {
+  font-size: 0.74rem;
+  color: var(--success);
+  opacity: 0.8;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 340px;
+}

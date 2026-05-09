@@ -144,6 +144,8 @@ class JenniferApp {
     this.recognition = null;
     this.assistantName = 'Jennifer';
     this.wakeWord = 'jennifer';
+    this._planEl = null;        // current plan block DOM element
+    this._planStepEls = [];     // per-step DOM elements
     this.toolActivity = null;
     this.ttsProgress = {
       visible: false,
@@ -380,6 +382,58 @@ class JenniferApp {
     label.textContent = message;
     percent.textContent = '';
     fill.style.width = '100%';
+  }
+
+  // ─── Plan block UI ────────────────────────────────────────────────────────
+
+  _showPlanStart(total, tasks) {
+    const el = document.getElementById('transcript');
+    const container = document.getElementById('transcript-container');
+
+    const block = document.createElement('div');
+    block.className = 'plan-block';
+    block.innerHTML = `<div class="plan-header">📋 Plan · ${total} steps</div><div class="plan-steps"></div>`;
+
+    const stepsEl = block.querySelector('.plan-steps');
+    this._planStepEls = (tasks || []).map((desc, i) => {
+      const step = document.createElement('div');
+      step.className = 'plan-step pending';
+      step.innerHTML = `<div class="step-icon"></div><div class="step-body"><div class="step-desc">${i + 1}. ${desc}</div></div>`;
+      stepsEl.appendChild(step);
+      return step;
+    });
+
+    el.appendChild(block);
+    this._planEl = block;
+    container.scrollTop = container.scrollHeight;
+  }
+
+  _activatePlanStep(stepNum) {
+    const el = this._planStepEls[stepNum - 1];
+    if (el) el.className = 'plan-step active';
+    document.getElementById('transcript-container').scrollTop = 9999;
+  }
+
+  _completePlanStep(stepNum, result) {
+    const el = this._planStepEls[stepNum - 1];
+    if (!el) return;
+    el.className = 'plan-step done';
+    if (result) {
+      const body = el.querySelector('.step-body');
+      const r = document.createElement('div');
+      r.className = 'step-result';
+      r.textContent = result.slice(0, 120) + (result.length > 120 ? '…' : '');
+      body.appendChild(r);
+    }
+    document.getElementById('transcript-container').scrollTop = 9999;
+  }
+
+  _finishPlan() {
+    if (this._planEl) {
+      this._planEl.querySelector('.plan-header').textContent = '✅ Plan complete';
+    }
+    this._planEl = null;
+    this._planStepEls = [];
   }
 
   // ─── Startup ─────────────────────────────────────────────────────────────
@@ -663,7 +717,25 @@ class JenniferApp {
         break;
 
       case 'tool_call':
-        this._showToolCall(msg.name);
+        // Don't show plan_and_execute as a generic tool call — plan_start handles that
+        if (msg.name !== 'plan_and_execute') this._showToolCall(msg.name);
+        break;
+
+      case 'plan_start':
+        this._showPlanStart(msg.total, msg.tasks);
+        break;
+
+      case 'plan_step':
+        this._activatePlanStep(msg.step);
+        this._showToolCall(msg.tool_hint || `step ${msg.step}/${msg.total}`);
+        break;
+
+      case 'plan_step_done':
+        this._completePlanStep(msg.step, msg.result);
+        break;
+
+      case 'plan_complete':
+        this._finishPlan();
         break;
 
       case 'tts_progress':

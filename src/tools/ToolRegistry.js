@@ -12,21 +12,29 @@ class ToolRegistry {
   }
 
   getSchemas() {
-    return Array.from(this._tools.values()).map(t => ({
-      type: 'function',
-      function: {
-        name: t.name,
-        description: t.description,
-        parameters: t.parameters,
-      },
-    }));
+    return this.getSchemasExcluding([]);
   }
 
-  async execute(name, args) {
+  // Returns schemas excluding specified tool names (used by PlannerTool sub-calls)
+  getSchemasExcluding(excludeNames = []) {
+    return Array.from(this._tools.values())
+      .filter(t => !excludeNames.includes(t.name))
+      .map(t => ({
+        type: 'function',
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.parameters,
+        },
+      }));
+  }
+
+  // ctx is passed to tools that accept a second argument (e.g. PlannerTool for onStatus)
+  async execute(name, args, ctx = {}) {
     const tool = this._tools.get(name);
     if (!tool) throw new Error(`Unknown tool: ${name}`);
     console.log(`[tools] ${name}(${JSON.stringify(args).slice(0, 120)})`);
-    return tool.execute(args);
+    return tool.execute(args, ctx);
   }
 
   list() {
