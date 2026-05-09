@@ -56,7 +56,7 @@ Browser (Chrome)
 - **Reasoning model** — 429inference.com `gpt-oss` with chain-of-thought
 - **Tool system** — extensible plugin registry; model picks the right tool
 - **Memory variables** — save contacts, URLs, blogs, and reusable values at `/memory`
-- **System TTS** — macOS `say` / Linux `espeak` / Windows SAPI out of the box
+- **System TTS** — macOS `say` / Linux `espeak-ng` / Windows SAPI — installed automatically on Linux
 - **Voice cloning** — embedded Coqui XTTS v2 service (no ElevenLabs)
 - **REST + WebSocket API** — connect any device (Raspberry Pi, mobile, etc.)
 
@@ -90,7 +90,7 @@ jennifer/
 │   ├── inference/
 │   │   └── InferenceClient.js   — 429 API + tool-call loop
 │   ├── tts/
-│   │   ├── SystemTTSProvider.js — macOS say / Linux espeak / Windows SAPI
+│   │   ├── SystemTTSProvider.js — macOS say / Linux espeak-ng / Windows SAPI
 │   │   └── CoquiTTSProvider.js  — XTTS v2 voice cloning
 │   ├── tools/
 │   │   ├── ToolRegistry.js      — plugin system
@@ -206,9 +206,10 @@ See [Raspberry Pi docs](https://97115104.github.io/jennifer/raspberry-pi).
 ## Requirements
 
 - Node.js 18+
-- ffmpeg (`brew install ffmpeg`)
+- ffmpeg — auto-installed by `install.sh`; or manually: `brew install ffmpeg` / `sudo apt install ffmpeg` / `sudo pacman -S ffmpeg`
+- espeak-ng — auto-installed by `install.sh` on Linux (system TTS)
 - Chrome (for wake word — Web Speech API)
-- Python 3.9–3.11 (optional, for Coqui voice cloning)
+- Python 3.11 (optional, for Coqui voice cloning — `install.sh` offers to install it automatically)
 
 ---
 

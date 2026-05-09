@@ -50,6 +50,8 @@ The embedded server runs locally, generates audio using the XTTS v2 model, and J
 
 When prompted, opt into voice cloning. This creates `tts/.venv`, installs the Python dependencies, and can optionally pre-download the XTTS v2 model.
 
+> **Python 3.11 required.** On Arch Linux, `install.sh` will offer to install `python311` from the AUR. On Ubuntu/Mint, it will install via the deadsnakes PPA. Python 3.9–3.11 are all supported; Python 3.12+ is not compatible with Coqui TTS 0.22.0.
+
 ### 2. Record a voice sample in Jennifer
 
 You need 10–30 seconds of clean audio in the voice you want to clone.
@@ -86,7 +88,7 @@ The deploy script starts `tts/server.py` automatically, waits for XTTS to load, 
 
 ## Fallback Behavior
 
-If the Coqui server is unreachable at startup, Jennifer automatically falls back to system TTS (macOS `say`) — you won't get an error, just the default voice.
+If the Coqui server is unreachable at startup, Jennifer automatically falls back to system TTS (macOS `say` / Linux `espeak-ng`) — you won't get an error, just the default voice.
 
 To check which TTS is active:
 

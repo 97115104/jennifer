@@ -20,8 +20,9 @@ nav_order: 2
 
 | Requirement | Version | Notes |
 |-------------|---------|-------|
-| Node.js | 18+ | [nodejs.org](https://nodejs.org) |
-| ffmpeg | any | `brew install ffmpeg` / `apt install ffmpeg` |
+| Node.js | 18+ | [nodejs.org](https://nodejs.org) — auto-installed on Arch/Debian by `install.sh` |
+| ffmpeg | any | Auto-installed by `install.sh` |
+| espeak-ng | any | Auto-installed by `install.sh` on Linux (system TTS) |
 | Chrome | any | Required for wake word (Web Speech API) |
 | 429 API key | — | Get at [429inference.com](https://429inference.com) |
 
@@ -43,9 +44,12 @@ cd jennifer
 ```
 
 This will:
-- Check for Node.js 18+ and ffmpeg
+- Check for Node.js 18+ and ffmpeg (auto-installs both on Arch and Debian/Ubuntu)
+- Install `espeak-ng` on Linux for system TTS
 - Run `npm install`
 - Create a `.env` template
+- On **Arch**: prompt to install Python 3.11 from the AUR (`python311`) for voice cloning
+- On **Ubuntu / Linux Mint**: prompt to install Python 3.11 via the deadsnakes PPA for voice cloning
 - Optionally pre-download the Whisper model (~150MB)
 - Optionally set up Coqui voice cloning
 
@@ -83,7 +87,9 @@ All configuration is in `.env`:
 # Required
 429-API-KEY=your_key_here
 
-# TTS provider: system (default) | coqui
+# TTS provider:
+#   system — built-in (macOS: say / Linux: espeak-ng — no extra setup)
+#   coqui  — voice cloning via Coqui XTTS v2 (requires install.sh voice cloning setup)
 TTS_PROVIDER=system
 
 # For voice cloning (Coqui XTTS v2)
@@ -133,3 +139,4 @@ Change with `WHISPER_MODEL=Xenova/whisper-small.en` in `.env`.
 - Check browser console for errors
 - Ensure ffmpeg is installed: `ffmpeg -version`
 - macOS: `say` must be available (pre-installed)
+- Linux: `espeak-ng` must be installed — run `install.sh` or `sudo pacman -S espeak-ng` / `sudo apt install espeak-ng`
