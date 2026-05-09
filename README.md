@@ -164,6 +164,12 @@ Open `http://localhost:3000/memory` to save named emails, URLs, blogs, and reusa
 
 ---
 
+## Assistant Name
+
+Open `http://localhost:3000/settings` and use the General tab to rename Jennifer. The main screen and wake phrase update to the saved name, for example `Ok Dakota`.
+
+---
+
 ## Raspberry Pi
 
 ```bash

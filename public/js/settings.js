@@ -41,6 +41,7 @@ async function loadSettings() {
   ]);
   settings = await settingsRes.json();
   health = await healthRes.json();
+  renderApp(settings.app);
   renderTTSStatus(settings.tts, health.tts);
   renderVoices(settings.voices, settings.tts);
   renderGoogle(settings.google);
@@ -65,6 +66,31 @@ const voiceFileInput = document.getElementById('voice-file');
 const recIndicator = document.getElementById('rec-indicator');
 const recTimer = document.getElementById('rec-timer');
 const promptsBox = document.getElementById('reading-prompts');
+const assistantNameInput = document.getElementById('assistant-name');
+const saveAssistantNameBtn = document.getElementById('save-assistant-name-btn');
+
+function renderApp(app = {}) {
+  if (assistantNameInput) assistantNameInput.value = app.name || 'Jennifer';
+}
+
+saveAssistantNameBtn?.addEventListener('click', async () => {
+  const name = assistantNameInput.value.trim();
+  if (!name) { showToast('Enter an assistant name', 'error'); return; }
+
+  try {
+    const res = await fetch('/api/settings/app', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    showToast(`Assistant name saved as "${data.app.name}"`, 'success');
+    await loadSettings();
+  } catch (err) {
+    showToast('Name update failed: ' + err.message, 'error');
+  }
+});
 
 function cleanVoiceName(value) {
   return (value || '').replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);

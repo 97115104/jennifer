@@ -127,11 +127,29 @@ function lookup(query, type = 'any', limit = 5) {
     .map(match => match.entry);
 }
 
+function formatForPrompt(entries) {
+  if (!entries.length) return '';
+  const lines = entries.map(entry => {
+    const aliases = entry.aliases?.length ? ` aliases="${entry.aliases.join(', ')}"` : '';
+    const note = entry.note ? ` note="${entry.note}"` : '';
+    return `- ${entry.type} "${entry.key}"${aliases}: ${entry.value}${note}`;
+  });
+
+  return [
+    'Saved memory entries relevant to the current user request:',
+    ...lines,
+    'Use these saved values directly. Do not ask the user to provide a URL, email address, or variable value that is listed here.',
+    'If the user asks for the latest content from a saved blog or website, call fetch_url with the saved URL first.',
+    'If the user asks to email a saved contact, call send_email with the saved email address.',
+  ].join('\n');
+}
+
 module.exports = {
   list,
   create,
   update,
   remove,
   lookup,
+  formatForPrompt,
   normalizeUrl,
 };

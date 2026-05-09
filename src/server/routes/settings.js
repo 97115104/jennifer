@@ -21,6 +21,15 @@ function sanitizeVoiceName(name) {
   return String(name || '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
 }
 
+function cleanAssistantName(name) {
+  const cleaned = String(name || '')
+    .replace(/[^a-zA-Z0-9 _'-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 32);
+  return cleaned || 'Jennifer';
+}
+
 function listVoices() {
   if (!fs.existsSync(VOICES_DIR)) return [];
   return fs.readdirSync(VOICES_DIR)
@@ -41,11 +50,19 @@ function createSettingsRouter() {
   router.get('/', (req, res) => {
     const s = getSettings().getAll();
     res.json({
+      app: s.app,
       tts: s.tts,
       google: { connected: s.google.connected, email: s.google.email, name: s.google.name },
       github: { connected: s.github.connected, username: s.github.username, name: s.github.name },
       voices: listVoices(),
     });
+  });
+
+  // POST /api/settings/app — update assistant display name and wake word
+  router.post('/app', (req, res) => {
+    const name = cleanAssistantName(req.body.name);
+    getSettings().set('app', { name });
+    res.json({ ok: true, app: { name } });
   });
 
   // GET /api/settings/voices — list voice samples

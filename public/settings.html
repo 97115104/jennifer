@@ -288,13 +288,33 @@
     </div>
 
     <div class="tabs">
-      <button class="tab-btn active" data-tab="voice">Voice Cloning</button>
+      <button class="tab-btn active" data-tab="general">General</button>
+      <button class="tab-btn" data-tab="voice">Voice Cloning</button>
       <button class="tab-btn" data-tab="google">Google</button>
       <button class="tab-btn" data-tab="github">GitHub</button>
     </div>
 
+    <!-- ─── General ───────────────────────────────────────────────────────── -->
+    <div class="tab-panel active" id="tab-general">
+
+      <div class="section">
+        <h3>Assistant Name</h3>
+
+        <div class="form-row">
+          <label>Name</label>
+          <input type="text" id="assistant-name" placeholder="Jennifer" maxlength="32" />
+          <button class="btn primary" id="save-assistant-name-btn">Save Name</button>
+        </div>
+
+        <div class="config-note">
+          The main screen title and wake phrase use this name. For example, naming it <code>Dakota</code> makes <code>Ok Dakota</code> the wake phrase.
+        </div>
+      </div>
+
+    </div>
+
     <!-- ─── Voice Cloning ──────────────────────────────────────────────────── -->
-    <div class="tab-panel active" id="tab-voice">
+    <div class="tab-panel" id="tab-voice">
 
       <div id="tts-status"></div>
 

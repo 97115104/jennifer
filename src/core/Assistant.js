@@ -7,9 +7,20 @@ const os = require('os');
 const { v4: uuidv4 } = require('uuid');
 
 const Conversation = require('./Conversation');
+const MemoryStore = require('./MemoryStore');
+const Settings = require('./Settings');
 const InferenceClient = require('../inference/InferenceClient');
 
-const SYSTEM_PROMPT = `You are Jennifer, a conversational AI voice assistant. Your responses will be spoken aloud, so follow these rules strictly:
+function getAssistantName() {
+  try {
+    return Settings.getInstance().get('app')?.name || 'Jennifer';
+  } catch {
+    return 'Jennifer';
+  }
+}
+
+function buildSystemPrompt(name = 'Jennifer') {
+  return `You are ${name}, a conversational AI voice assistant. Your responses will be spoken aloud, so follow these rules strictly:
 - Write responses as natural spoken sentences — no markdown, no bullet points, no headers, no asterisks, no code blocks
 - Be concise. A one or two sentence answer is usually best unless the user explicitly asks for details
 - When you are about to use a tool, say what you are doing in one short sentence first
@@ -25,6 +36,7 @@ TOOL USE RULES — follow these exactly:
 - When creating files, websites, or running system tasks, use execute_shell and write_file.
 - When asked to send email, use send_email.
 - Chain tools when needed: fetch a blog homepage to find the latest post URL, then fetch that URL for full content.`;
+}
 
 class Assistant extends EventEmitter {
   constructor({ sttProvider, ttsProvider, toolRegistry }) {
@@ -33,7 +45,21 @@ class Assistant extends EventEmitter {
     this.tts = ttsProvider;
     this.tools = toolRegistry;
     this.inference = new InferenceClient(toolRegistry);
-    this.conversation = new Conversation(SYSTEM_PROMPT);
+    this.conversation = new Conversation(buildSystemPrompt(getAssistantName()));
+  }
+
+  _messagesForInference(text) {
+    const messages = this.conversation.getMessages();
+    messages[0] = { role: 'system', content: buildSystemPrompt(getAssistantName()) };
+
+    const memoryMatches = MemoryStore.lookup(text, 'any', 8);
+    const memoryContext = MemoryStore.formatForPrompt(memoryMatches);
+    if (memoryContext) {
+      console.log(`[assistant] Memory context matched: ${memoryMatches.map(entry => `${entry.type}:${entry.key}`).join(', ')}`);
+      messages.splice(1, 0, { role: 'system', content: memoryContext });
+    }
+
+    return messages;
   }
 
   async initialize() {
@@ -78,7 +104,7 @@ class Assistant extends EventEmitter {
 
     const t0 = Date.now();
     const responseText = await this.inference.complete(
-      this.conversation.getMessages(),
+      this._messagesForInference(text),
       { onStatus: (event) => this.emit('tool_event', event) }
     );
     console.log(`[assistant] Inference complete in ${Date.now() - t0}ms`);

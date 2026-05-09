@@ -11,3 +11,5 @@ data/voices/
 data/settings.json
 tts/.venv/
 tts/server.log
+
+.DS_Store

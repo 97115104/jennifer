@@ -7,6 +7,7 @@ const DATA_DIR = path.join(__dirname, '../../data');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 const DEFAULTS = {
+  app: { name: 'Jennifer' },
   tts: { provider: 'system', activeVoice: null },
   google: { connected: false, tokens: null, email: null, name: null },
   github: { connected: false, accessToken: null, username: null, name: null },
@@ -24,6 +25,7 @@ class Settings {
     try {
       const raw = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
       return {
+        app: { ...DEFAULTS.app, ...raw.app },
         tts: { ...DEFAULTS.tts, ...raw.tts },
         google: { ...DEFAULTS.google, ...raw.google },
         github: { ...DEFAULTS.github, ...raw.github },

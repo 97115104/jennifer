@@ -11,6 +11,7 @@ const os = require('os');
 const WebSocket = require('ws');
 const { v4: uuidv4 } = require('uuid');
 const config = require('../config');
+const Settings = require('../core/Settings');
 
 const createAuthRouter = require('./routes/auth');
 const createSettingsRouter = require('./routes/settings');
@@ -229,7 +230,8 @@ function attachWebSocket(server, assistant) {
       for (const [event, fn] of Object.entries(handlers)) assistant.off(event, fn);
     });
 
-    send({ type: 'status', state: 'idle', message: 'Connected to Jennifer' });
+    const assistantName = Settings.getInstance().get('app')?.name || 'Jennifer';
+    send({ type: 'status', state: 'idle', message: `Connected to ${assistantName}` });
   });
 
   return wss;

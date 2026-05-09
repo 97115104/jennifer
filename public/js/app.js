@@ -142,6 +142,8 @@ class JenniferApp {
     this.isListeningForSpeech = false;
     this.isSpeaking = false;
     this.recognition = null;
+    this.assistantName = 'Jennifer';
+    this.wakeWord = 'jennifer';
     this.toolActivity = null;
     this.ttsProgress = {
       visible: false,
@@ -151,9 +153,38 @@ class JenniferApp {
     };
   }
 
-  init() {
+  async init() {
+    await this._loadAppSettings();
+    window.addEventListener('pageshow', () => this._loadAppSettings());
     this._bindUI();
     this._connectWS();
+  }
+
+  async _loadAppSettings() {
+    try {
+      const res = await fetch('/api/settings');
+      const data = await res.json();
+      this._setAssistantName(data.app?.name || 'Jennifer');
+    } catch (err) {
+      console.warn('[jennifer] Settings load failed:', err.message);
+      this._setAssistantName('Jennifer');
+    }
+  }
+
+  _setAssistantName(name) {
+    const cleaned = String(name || 'Jennifer').trim() || 'Jennifer';
+    this.assistantName = cleaned;
+    this.wakeWord = cleaned.toLowerCase();
+
+    document.title = cleaned;
+    const title = document.getElementById('assistant-title');
+    if (title) title.textContent = cleaned;
+
+    const orbLetter = document.getElementById('orb-letter');
+    if (orbLetter) orbLetter.textContent = cleaned.slice(0, 1).toUpperCase();
+
+    const wakePhrase = document.getElementById('wake-phrase');
+    if (wakePhrase) wakePhrase.textContent = `"Ok ${cleaned}"`;
   }
 
   // ─── WebSocket ────────────────────────────────────────────────────────────
@@ -202,7 +233,7 @@ class JenniferApp {
     document.body.setAttribute('data-state', state);
     const labels = {
       idle:        'Ready',
-      listening:   'Listening for "Ok Jennifer"…',
+      listening:   `Listening for "Ok ${this.assistantName}"…`,
       recording:   'Listening…',
       processing:  'Processing…',
       thinking:    'Thinking…',
@@ -496,7 +527,7 @@ class JenniferApp {
         .slice(-4)
         .map(r => r[0].transcript.toLowerCase())
         .join(' ');
-      if (recent.includes('jennifer')) {
+      if (recent.includes(this.wakeWord)) {
         console.log(`[jennifer] Wake word detected in: "${recent}"`);
         this._onWakeWord();
       }
@@ -514,7 +545,7 @@ class JenniferApp {
     };
 
     try { this.recognition.start(); } catch {}
-    console.log('[jennifer] Wake word detection active (listening for "Jennifer")');
+    console.log(`[jennifer] Wake word detection active (listening for "${this.assistantName}")`);
   }
 
   _stopWakeWord() {

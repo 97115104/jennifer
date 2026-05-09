@@ -14,10 +14,10 @@
       <div class="orb" id="orb">
         <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
           <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" stroke-width="2"/>
-          <text x="50" y="62" text-anchor="middle" font-size="36" fill="currentColor">J</text>
+          <text id="orb-letter" x="50" y="62" text-anchor="middle" font-size="36" fill="currentColor">J</text>
         </svg>
       </div>
-      <h1>Jennifer</h1>
+      <h1 id="assistant-title">Jennifer</h1>
       <div class="header-actions">
         <a href="/settings" class="settings-link" title="Settings">
           <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -63,7 +63,7 @@
       </div>
     </div>
 
-    <p class="hint" id="hint">Say <em>"Ok Jennifer"</em> to start, or click Record</p>
+    <p class="hint" id="hint">Say <em id="wake-phrase">"Ok Jennifer"</em> to start, or click Record</p>
   </div>
 
   <!-- Silero VAD ML model (served locally from node_modules) -->
