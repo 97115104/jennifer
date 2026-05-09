@@ -1,5 +1,53 @@
 'use strict';
 
+// ─── Voice Activity Detector ──────────────────────────────────────────────────
+//
+// Real services (Siri, Google, Alexa) use trained VAD models that look at the
+// 300–3400Hz speech frequency band and compare it to an adaptive noise floor.
+// We replicate this in the browser without ML:
+//   1. Only measure energy in the speech band (ignores HVAC, fans, etc.)
+//   2. Adaptive noise floor: slowly drifts toward ambient level during silence
+//   3. Speech = energy at least SNR_THRESHOLD × above the noise floor
+//   4. Silence countdown only begins AFTER speech has been detected
+//      (so an accidental wake-word trigger that produces no speech auto-cancels)
+//
+class SpeechVAD {
+  constructor(analyser, sampleRate) {
+    const binWidth = sampleRate / analyser.fftSize;
+    this.lowBin  = Math.max(1, Math.round(300  / binWidth));   // ~300Hz
+    this.highBin = Math.min(analyser.frequencyBinCount - 1, Math.round(3400 / binWidth)); // ~3400Hz
+    this.analyser = analyser;
+    this.buf = new Uint8Array(analyser.frequencyBinCount);
+
+    this.noiseFloor = null;
+    this.SNR_THRESHOLD = 2.2;   // speech must be 2.2× above noise floor
+    this.ABS_THRESHOLD = 12;    // and above this absolute minimum energy
+    this.NOISE_ADAPT   = 0.02;  // noise floor adaptation speed (0=never, 1=instant)
+  }
+
+  measure() {
+    this.analyser.getByteFrequencyData(this.buf);
+    let sum = 0;
+    for (let i = this.lowBin; i < this.highBin; i++) sum += this.buf[i];
+    const energy = sum / (this.highBin - this.lowBin);
+
+    if (this.noiseFloor === null) this.noiseFloor = energy;
+
+    const isSpeech = energy > this.ABS_THRESHOLD && energy > this.noiseFloor * this.SNR_THRESHOLD;
+
+    // Only adapt noise floor during non-speech — don't let loud speech raise it
+    if (!isSpeech) {
+      this.noiseFloor += (energy - this.noiseFloor) * this.NOISE_ADAPT;
+    }
+
+    return { energy, isSpeech, noiseFloor: this.noiseFloor };
+  }
+
+  reset() { this.noiseFloor = null; }
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+
 class JenniferApp {
   constructor() {
     this.ws = null;
@@ -7,16 +55,20 @@ class JenniferApp {
     this.recorder = null;
     this.audioContext = null;
     this.analyser = null;
+    this.vad = null;
     this.stream = null;
 
     this.state = 'idle';
     this.isRecording = false;
     this.isSpeaking = false;
-    this.silenceStart = null;
-    this.waveformRaf = null;
 
-    this.SILENCE_THRESHOLD = 8;
-    this.SILENCE_DURATION = 3000;
+    // VAD state — reset each recording session
+    this.hasSpeech = false;    // has any speech been detected this session?
+    this.silenceStart = null;  // when silence began (after speech was detected)
+
+    // How long silence must persist after speech ends before we stop.
+    // 1500ms matches most voice assistants. Increase if you get cut off mid-sentence.
+    this.SILENCE_DURATION = 1500;
   }
 
   init() {
@@ -37,7 +89,10 @@ class JenniferApp {
     };
     this.ws.onmessage = e => {
       const msg = JSON.parse(e.data);
-      if (msg.type !== 'status') console.log(`[jennifer] ← ws:${msg.type}`, msg.type === 'audio' ? `(~${(msg.data?.length * 0.75 / 1024).toFixed(1)}KB)` : msg);
+      if (msg.type !== 'status') {
+        console.log(`[jennifer] ← ws:${msg.type}`,
+          msg.type === 'audio' ? `(~${(msg.data?.length * 0.75 / 1024).toFixed(1)}KB)` : msg);
+      }
       this._onMessage(msg);
     };
     this.ws.onclose = e => {
@@ -66,12 +121,12 @@ class JenniferApp {
     this.state = state;
     document.body.setAttribute('data-state', state);
     const labels = {
-      idle: 'Ready',
-      listening: 'Listening for "Ok Jennifer"…',
-      recording: 'Recording… (3s silence to send)',
-      processing: 'Processing…',
-      thinking: 'Thinking…',
-      speaking: 'Speaking…',
+      idle:        'Ready',
+      listening:   'Listening for "Ok Jennifer"…',
+      recording:   'Listening…',
+      processing:  'Processing…',
+      thinking:    'Thinking…',
+      speaking:    'Speaking…',
     };
     this._setStatus(labels[state] || state);
   }
@@ -81,21 +136,24 @@ class JenniferApp {
   }
 
   _addMessage(role, text) {
+    const container = document.getElementById('transcript-container');
     const el = document.getElementById('transcript');
     const div = document.createElement('div');
     div.className = `message ${role}`;
     div.textContent = text;
     el.appendChild(div);
-    el.scrollTop = el.scrollHeight;
+    // Scroll the container (the element with overflow:auto), not the inner div
+    container.scrollTop = container.scrollHeight;
   }
 
   _addNote(text) {
+    const container = document.getElementById('transcript-container');
     const el = document.getElementById('transcript');
     const div = document.createElement('div');
     div.className = 'message system-note';
     div.textContent = text;
     el.appendChild(div);
-    el.scrollTop = el.scrollHeight;
+    container.scrollTop = container.scrollHeight;
   }
 
   // ─── Startup ─────────────────────────────────────────────────────────────
@@ -116,8 +174,7 @@ class JenniferApp {
     this._startWaveform();
 
     document.getElementById('start-btn').style.display = 'none';
-    const controls = document.getElementById('controls');
-    controls.classList.add('visible');
+    document.getElementById('controls').classList.add('visible');
 
     this._setState('listening');
   }
@@ -127,23 +184,30 @@ class JenniferApp {
   _setupAudioContext() {
     this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const source = this.audioContext.createMediaStreamSource(this.stream);
+
     this.analyser = this.audioContext.createAnalyser();
-    this.analyser.fftSize = 1024;
+    this.analyser.fftSize = 2048;        // 1024 bins — more frequency resolution for VAD
+    this.analyser.smoothingTimeConstant = 0.3;
     source.connect(this.analyser);
+
+    this.vad = new SpeechVAD(this.analyser, this.audioContext.sampleRate);
+    console.log(`[jennifer] AudioContext: ${this.audioContext.sampleRate}Hz, VAD speech bins: ${this.vad.lowBin}–${this.vad.highBin}`);
   }
 
   _startWaveform() {
     const canvas = document.getElementById('waveform');
     const ctx = canvas.getContext('2d');
-    const buf = new Uint8Array(this.analyser.frequencyBinCount);
+    const buf = new Uint8Array(this.analyser.fftSize);
 
     const draw = () => {
-      this.waveformRaf = requestAnimationFrame(draw);
+      requestAnimationFrame(draw);
       this.analyser.getByteTimeDomainData(buf);
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.lineWidth = 2;
-      ctx.strokeStyle = this.isRecording ? '#e05252' : '#4f8ef7';
+      ctx.strokeStyle = this.isRecording
+        ? (this.hasSpeech ? '#52c47a' : '#e05252')  // green=speech detected, red=waiting
+        : '#4f8ef7';
       ctx.beginPath();
 
       const step = canvas.width / buf.length;
@@ -161,12 +225,12 @@ class JenniferApp {
   _startWakeWord() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
-      console.warn('[jennifer] Web Speech API not available — Chrome required for wake word detection');
+      console.warn('[jennifer] Web Speech API not available — Chrome required for wake word');
       this._addNote('⚠ Wake word unavailable — use the Record button (Chrome required)');
       return;
     }
 
-    console.log('[jennifer] Starting wake word detection (listening for "Jennifer")');
+    console.log('[jennifer] Wake word detection active (listening for "Jennifer")');
     this.recognition = new SR();
     this.recognition.continuous = true;
     this.recognition.interimResults = true;
@@ -180,7 +244,7 @@ class JenniferApp {
         .map(r => r[0].transcript.toLowerCase())
         .join(' ');
       if (recent.includes('jennifer')) {
-        console.log(`[jennifer] Wake word detected in: "${recent}"`);
+        console.log(`[jennifer] Wake word in: "${recent}"`);
         this._onWakeWord();
       }
     };
@@ -194,9 +258,7 @@ class JenniferApp {
 
     this.recognition.onerror = e => {
       console.warn(`[jennifer] Speech recognition error: ${e.error}`);
-      if (e.error === 'not-allowed') {
-        this._addNote('Speech recognition blocked by browser.');
-      }
+      if (e.error === 'not-allowed') this._addNote('Speech recognition blocked by browser.');
     };
 
     try { this.recognition.start(); } catch (e) {}
@@ -210,7 +272,6 @@ class JenniferApp {
 
   _onWakeWord() {
     if (this.isRecording || this.isSpeaking) return;
-    console.log('[jennifer] Wake word detected');
     this._startRecording();
   }
 
@@ -222,64 +283,82 @@ class JenniferApp {
 
   _startRecording() {
     this.isRecording = true;
+    this.hasSpeech = false;
     this.silenceStart = null;
+    this.vad.reset();
     this._setState('recording');
     this._stopWakeWord();
 
     const mimeType = this._bestMime();
-    console.log(`[jennifer] Recording started (mimeType=${mimeType || 'browser default'})`);
+    console.log(`[jennifer] Recording started (mimeType=${mimeType || 'default'}, VAD active)`);
     const chunks = [];
 
     this.recorder = new MediaRecorder(this.stream, mimeType ? { mimeType } : undefined);
     this.recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
     this.recorder.onstop = () => {
       const blob = new Blob(chunks, { type: this.recorder.mimeType || 'audio/webm' });
-      console.log(`[jennifer] Recording stopped: ${chunks.length} chunks, ${(blob.size / 1024).toFixed(1)}KB (${blob.type})`);
-      this._sendAudio(blob);
+      console.log(`[jennifer] Recording stopped: ${chunks.length} chunks, ${(blob.size / 1024).toFixed(1)}KB`);
+      if (this.hasSpeech) {
+        this._sendAudio(blob);
+      } else {
+        console.log('[jennifer] No speech detected — discarding and going back to listening');
+        this._setState('listening');
+        this._startWakeWord();
+      }
     };
 
     this.recorder.start(100);
-    this._monitorSilence();
+    this._runVAD();
   }
 
   _bestMime() {
-    const candidates = [
-      'audio/webm;codecs=opus',
-      'audio/webm',
-      'audio/ogg;codecs=opus',
-      'audio/mp4',
-    ];
+    const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
     return candidates.find(t => MediaRecorder.isTypeSupported(t)) || '';
   }
 
-  _monitorSilence() {
+  _runVAD() {
     if (!this.isRecording) return;
 
-    const buf = new Uint8Array(this.analyser.frequencyBinCount);
-    this.analyser.getByteFrequencyData(buf);
+    const { isSpeech, energy, noiseFloor } = this.vad.measure();
+    const now = Date.now();
 
-    let sum = 0;
-    for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
-    const rms = Math.sqrt(sum / buf.length);
+    if (isSpeech) {
+      // Speech detected — reset silence timer
+      if (!this.hasSpeech) {
+        console.log(`[jennifer] Speech onset detected (energy=${energy.toFixed(1)}, floor=${noiseFloor.toFixed(1)})`);
+      }
+      this.hasSpeech = true;
+      this.silenceStart = null;
+      this._setStatus('Recording…');
 
-    if (rms < this.SILENCE_THRESHOLD) {
-      if (!this.silenceStart) this.silenceStart = Date.now();
-      else if (Date.now() - this.silenceStart >= this.SILENCE_DURATION) {
+    } else if (this.hasSpeech) {
+      // Speech ended — count down to stop
+      if (!this.silenceStart) {
+        this.silenceStart = now;
+        console.log(`[jennifer] Speech offset — silence countdown started`);
+      }
+      const elapsed = now - this.silenceStart;
+      const remaining = Math.ceil((this.SILENCE_DURATION - elapsed) / 1000);
+      this._setStatus(remaining > 0 ? `Done? Sending in ${remaining}s…` : 'Sending…');
+
+      if (elapsed >= this.SILENCE_DURATION) {
         this._stopRecording();
         return;
       }
+
     } else {
-      this.silenceStart = null;
+      // No speech yet — show pulsing prompt
+      this._setStatus('Speak now…');
     }
 
-    requestAnimationFrame(() => this._monitorSilence());
+    requestAnimationFrame(() => this._runVAD());
   }
 
   _stopRecording() {
     if (!this.isRecording) return;
     this.isRecording = false;
     this.recorder?.stop();
-    this._setState('processing');
+    if (this.hasSpeech) this._setState('processing');
   }
 
   // ─── Audio send / receive ─────────────────────────────────────────────────
@@ -309,11 +388,11 @@ class JenniferApp {
       for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
       const blob = new Blob([arr], { type: mimeType || 'audio/mpeg' });
       const url = URL.createObjectURL(blob);
-      console.log(`[jennifer] Playing audio response: ${(blob.size / 1024).toFixed(1)}KB (${mimeType})`);
+      console.log(`[jennifer] Playing audio: ${(blob.size / 1024).toFixed(1)}KB`);
       const audio = new Audio(url);
-      audio.onended = () => { URL.revokeObjectURL(url); console.log('[jennifer] Audio playback finished'); resolve(); };
-      audio.onerror = e => { console.error('[jennifer] Audio playback error:', e); URL.revokeObjectURL(url); resolve(); };
-      audio.play().catch(e => { console.error('[jennifer] audio.play() failed:', e); resolve(); });
+      audio.onended = () => { URL.revokeObjectURL(url); console.log('[jennifer] Playback done'); resolve(); };
+      audio.onerror = e => { console.error('[jennifer] Playback error:', e); URL.revokeObjectURL(url); resolve(); };
+      audio.play().catch(e => { console.error('[jennifer] play() failed:', e); resolve(); });
     });
   }
 
