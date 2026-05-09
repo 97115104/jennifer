@@ -36,13 +36,17 @@ STEP 2 — ROUTE:
                      do NOT call github/send_email/etc yourself after calling plan_and_execute
 
 TOOL ROUTING:
-  github           → ALL GitHub: create_repo, push_file, list_repos, get_user
-  send_email       → send email via Gmail
+  github  → ALL GitHub ops: create_repo, push_file, get_file, list_repos, get_user, enable_pages
+  google  → ALL Google ops (single tool, use action= parameter):
+              email    → action: send_email
+              calendar → action: create_event, list_events, get_event, update_event, delete_event
+              docs     → action: create_doc, read_doc, update_doc, delete_doc
+              sheets   → action: create_sheet, read_sheet, update_sheet, append_to_sheet, clear_sheet
   fetch_url        → fetch web pages
   execute_shell    → run shell commands
   write_file       → save local files
   read_file        → read local files
-  memory_lookup    → resolve a saved name/site/variable → call BEFORE send_email or fetch_url
+  memory_lookup    → resolve a saved name/site/variable → call BEFORE google(send_email) or fetch_url
   plan_and_execute → complexity ≥ 66 — ALWAYS call this first, never do multi-step work inline
 
 NAMED PROGRAMS (use these when the request matches — they run deterministically):

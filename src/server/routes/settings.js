@@ -5,6 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const axios = require('axios');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const config = require('../../config');
@@ -45,6 +46,38 @@ function createSettingsRouter() {
   });
 
   if (!fs.existsSync(VOICES_DIR)) fs.mkdirSync(VOICES_DIR, { recursive: true });
+
+  // GET /api/settings/google/validate — check which Google scopes are active in the stored token
+  router.get('/google/validate', async (req, res) => {
+    const { makeGoogleClient } = require('../../tools/_googleAuth');
+    const client = makeGoogleClient();
+    if (typeof client === 'string') return res.json({ connected: false });
+
+    try {
+      const tokenResponse = await client.getAccessToken();
+      const accessToken = tokenResponse.token;
+      if (!accessToken) return res.json({ connected: true, error: 'Token empty — reconnect Google', services: {} });
+
+      const info = await axios.get(
+        `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`
+      );
+      const granted = (info.data.scope || '').split(' ');
+
+      res.json({
+        connected: true,
+        services: {
+          gmail:    granted.includes('https://www.googleapis.com/auth/gmail.send'),
+          calendar: granted.includes('https://www.googleapis.com/auth/calendar.events'),
+          docs:     granted.includes('https://www.googleapis.com/auth/documents'),
+          sheets:   granted.includes('https://www.googleapis.com/auth/spreadsheets'),
+          drive:    granted.includes('https://www.googleapis.com/auth/drive.file'),
+        },
+      });
+    } catch (err) {
+      console.error('[settings/google/validate]', err.message);
+      res.json({ connected: true, error: err.message, services: {} });
+    }
+  });
 
   // GET /api/settings — current settings (no secrets)
   router.get('/', (req, res) => {

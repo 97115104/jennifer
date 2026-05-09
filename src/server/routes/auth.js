@@ -33,7 +33,15 @@ function createAuthRouter(config) {
     req.session.oauthState = state;
     const url = makeGoogleClient().generateAuthUrl({
       access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/gmail.send', 'email', 'profile'],
+      scope: [
+        'https://www.googleapis.com/auth/gmail.send',
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/documents',
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive.file',
+        'email',
+        'profile',
+      ],
       state,
       prompt: 'consent',
     });

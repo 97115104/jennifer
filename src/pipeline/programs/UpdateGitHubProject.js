@@ -14,7 +14,7 @@
 const Pipeline = require('../Pipeline');
 const { aiGenerate, toolCall, transform } = require('../steps');
 
-function build({ githubTool, emailTool, githubUsername }) {
+function build({ githubTool, googleTool, githubUsername }) {
   return new Pipeline('update_github_project', [
 
     // ── Step 1: Derive repo details ────────────────────────────────────────
@@ -93,8 +93,9 @@ Zero explanation. Zero markdown. Just the complete improved HTML file.`,
     // ── Step 5: Send email (optional) ─────────────────────────────────────
     toolCall({
       name: 'Send completion email',
-      tool: emailTool,
+      tool: googleTool,
       buildArgs: (ctx) => ({
+        action: 'send_email',
         to: ctx.email,
         subject: `Jennifer updated: ${ctx.repoName}`,
         body: [

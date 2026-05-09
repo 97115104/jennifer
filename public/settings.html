@@ -274,6 +274,39 @@
       border: 1px solid var(--danger);
     }
     .btn.danger:hover { background: rgba(224,82,82,0.1); }
+
+    .service-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .service-row:last-child { border-bottom: none; }
+    .service-icon {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+    .service-icon.gmail    { background: rgba(234,67,53,0.15);  color: #ea4335; }
+    .service-icon.calendar { background: rgba(66,133,244,0.15); color: #4285f4; }
+    .service-icon.docs     { background: rgba(66,133,244,0.15); color: #4285f4; }
+    .service-icon.sheets   { background: rgba(52,168,83,0.15);  color: #34a853; }
+    .service-icon.drive    { background: rgba(251,188,5,0.15);  color: #fbbc05; }
+    .service-name  { font-size: 0.875rem; font-weight: 600; flex: 1; }
+    .service-desc  { font-size: 0.78rem; color: var(--text-muted); }
+    .service-badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
+    .service-badge.ok       { background: rgba(82,196,122,0.12); border: 1px solid var(--success); color: var(--success); }
+    .service-badge.missing  { background: rgba(224,82,82,0.1);   border: 1px solid var(--danger);  color: var(--danger); }
+    .service-badge.checking { background: rgba(107,119,148,0.1); border: 1px solid var(--border);  color: var(--text-muted); }
   </style>
 </head>
 <body>
@@ -373,22 +406,33 @@
     <div class="tab-panel" id="tab-google">
 
       <div class="section">
-        <h3>Gmail</h3>
+        <h3>Google Account</h3>
         <div id="google-status"></div>
+        <div id="google-services" style="display:none;margin-bottom:14px">
+          <div style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:10px;font-weight:600">Services</div>
+          <div id="google-service-rows"></div>
+          <button class="btn ghost" id="google-validate-btn" style="margin-top:10px;font-size:0.8rem;padding:6px 14px" onclick="validateGoogleServices()">Validate Access</button>
+        </div>
         <div id="google-actions"></div>
 
         <div class="config-note">
-          <strong>How to get your Google credentials:</strong>
+          <strong>How to set up Google credentials:</strong>
           <ol>
-            <li>Open <a href="https://console.cloud.google.com/projectcreate" target="_blank">Google Cloud Console</a> and create a new project (name it "Jennifer" or anything)</li>
-            <li>Go to <a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank">Gmail API</a> and click <strong>Enable</strong></li>
+            <li>Open <a href="https://console.cloud.google.com/projectcreate" target="_blank">Google Cloud Console</a> and create a project</li>
+            <li>Enable each API your plan to use:
+              <a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank">Gmail</a>,
+              <a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank">Calendar</a>,
+              <a href="https://console.cloud.google.com/apis/library/docs.googleapis.com" target="_blank">Docs</a>,
+              <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank">Sheets</a>,
+              <a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank">Drive</a>
+            </li>
             <li>Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Credentials</a> → <strong>Create Credentials</strong> → <strong>OAuth 2.0 Client ID</strong></li>
-            <li>If prompted, configure the OAuth consent screen first: External, add your email as a test user</li>
+            <li>Configure OAuth consent screen if prompted: External, add your email as a test user</li>
             <li>Application type: <strong>Web application</strong></li>
-            <li>Under "Authorized redirect URIs" add: <code>http://localhost:3000/auth/google/callback</code></li>
-            <li>Click <strong>Create</strong> — copy the <strong>Client ID</strong> and <strong>Client secret</strong></li>
-            <li>Paste them into <code>.env</code> as <code>GOOGLE_CLIENT_ID=</code> and <code>GOOGLE_CLIENT_SECRET=</code>, then restart Jennifer</li>
+            <li>Authorized redirect URI: <code>http://localhost:3000/auth/google/callback</code></li>
+            <li>Copy the <strong>Client ID</strong> and <strong>Client secret</strong> into <code>.env</code> as <code>GOOGLE_CLIENT_ID=</code> and <code>GOOGLE_CLIENT_SECRET=</code>, then restart</li>
           </ol>
+          If a service shows <strong>Not authorized</strong>, disconnect and reconnect to get a fresh token with all scopes.
         </div>
       </div>
 

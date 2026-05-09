@@ -276,30 +276,87 @@ async function deleteVoice(name) {
 
 // ─── Google ───────────────────────────────────────────────────────────────────
 
+const GOOGLE_SERVICES = [
+  { key: 'gmail',    icon: '✉',  cls: 'gmail',    label: 'Gmail',          desc: 'Send email' },
+  { key: 'calendar', icon: '📅', cls: 'calendar', label: 'Calendar',       desc: 'Create and manage events' },
+  { key: 'docs',     icon: '📄', cls: 'docs',     label: 'Google Docs',    desc: 'Create, read, and update documents' },
+  { key: 'sheets',   icon: '📊', cls: 'sheets',   label: 'Google Sheets',  desc: 'Create, read, and update spreadsheets' },
+  { key: 'drive',    icon: '💾', cls: 'drive',    label: 'Drive',          desc: 'File management for Docs and Sheets' },
+];
+
+function renderServiceRows(services = null) {
+  const container = document.getElementById('google-service-rows');
+  if (!container) return;
+  container.innerHTML = GOOGLE_SERVICES.map(s => {
+    let badgeClass = 'checking';
+    let badgeText = 'Checking...';
+    if (services !== null) {
+      badgeClass = services[s.key] ? 'ok' : 'missing';
+      badgeText  = services[s.key] ? 'Authorized' : 'Not authorized';
+    }
+    return `
+      <div class="service-row">
+        <div class="service-icon ${s.cls}">${s.icon}</div>
+        <div style="flex:1">
+          <div class="service-name">${s.label}</div>
+          <div class="service-desc">${s.desc}</div>
+        </div>
+        <span class="service-badge ${badgeClass}" id="svc-badge-${s.key}">${badgeText}</span>
+      </div>`;
+  }).join('');
+}
+
 function renderGoogle(g = {}) {
-  const status = document.getElementById('google-status');
-  const actions = document.getElementById('google-actions');
+  const status   = document.getElementById('google-status');
+  const services = document.getElementById('google-services');
+  const actions  = document.getElementById('google-actions');
 
   if (g.connected) {
-    status.innerHTML = `<div class="connected-badge"><span>✓</span> Connected as ${g.email || g.name}</div>`;
-    actions.innerHTML = `
-      <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:10px">
-        Jennifer will now send emails using Gmail on your behalf.
-      </p>
-      <button class="btn danger" onclick="disconnectGoogle()">Disconnect Google</button>`;
+    status.innerHTML = `<div class="connected-badge"><span>✓</span> Connected as ${g.email || g.name || 'Google account'}</div>`;
+    services.style.display = 'block';
+    renderServiceRows(null); // show "Checking..." state
+    actions.innerHTML = `<button class="btn danger" onclick="disconnectGoogle()">Disconnect Google</button>`;
+    validateGoogleServices(); // auto-validate on render
   } else {
     status.innerHTML = `<div class="disconnected-badge"><span>○</span> Not connected</div>`;
+    services.style.display = 'none';
     actions.innerHTML = `
       <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:12px">
-        Connect your Google account so Jennifer can send emails via Gmail.<br>
+        Connect your Google account to enable Gmail, Calendar, Docs, and Sheets.<br>
         Requires <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> in <code>.env</code>.
       </p>
       <a href="/auth/google" class="btn primary" style="display:inline-block;text-decoration:none">Connect Google Account</a>`;
   }
 }
 
+async function validateGoogleServices() {
+  const btn = document.getElementById('google-validate-btn');
+  if (btn) { btn.textContent = 'Checking...'; btn.disabled = true; }
+
+  try {
+    const res  = await fetch('/api/settings/google/validate');
+    const data = await res.json();
+
+    if (!data.connected) {
+      renderServiceRows({});
+    } else if (data.error && !data.services) {
+      showToast('Validation error: ' + data.error, 'error');
+      renderServiceRows({});
+    } else {
+      renderServiceRows(data.services || {});
+      const allOk = Object.values(data.services || {}).every(Boolean);
+      if (!allOk) showToast('Some services need re-authorization — disconnect and reconnect Google.', 'error');
+    }
+  } catch (err) {
+    showToast('Validation failed: ' + err.message, 'error');
+    renderServiceRows({});
+  } finally {
+    if (btn) { btn.textContent = 'Validate Access'; btn.disabled = false; }
+  }
+}
+
 async function disconnectGoogle() {
-  if (!confirm('Disconnect Google?')) return;
+  if (!confirm('Disconnect Google? This removes all Google access including email, calendar, docs, and sheets.')) return;
   await fetch('/auth/google/disconnect', { method: 'POST' });
   showToast('Google disconnected');
   await loadSettings();

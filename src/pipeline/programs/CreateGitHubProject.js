@@ -29,7 +29,7 @@ function slugify(str) {
     .slice(0, 30);
 }
 
-function build({ githubTool, emailTool, githubUsername }) {
+function build({ githubTool, googleTool, githubUsername }) {
   return new Pipeline('create_github_project', [
 
     // ── Step 1: Concept ────────────────────────────────────────────────────
@@ -189,8 +189,9 @@ Output only the README content.`,
     // ── Step 9: Send email ─────────────────────────────────────────────────
     toolCall({
       name: 'Send completion email',
-      tool: emailTool,
+      tool: googleTool,
       buildArgs: (ctx) => ({
+        action: 'send_email',
         to: ctx.email,
         subject: `Jennifer built: ${ctx.concept.title}`,
         body: [

@@ -10,11 +10,11 @@ const CoquiTTSProvider = require('../tts/CoquiTTSProvider');
 const ToolRegistry = require('../tools/ToolRegistry');
 const WebFetchTool = require('../tools/WebFetchTool');
 const ShellTool = require('../tools/ShellTool');
-const EmailTool = require('../tools/EmailTool');
 const MemoryTool = require('../tools/MemoryTool');
 const ReadFileTool = require('../tools/ReadFileTool');
 const WriteFileTool = require('../tools/WriteFileTool');
 const GithubTool = require('../tools/GithubTool');
+const GoogleTool = require('../tools/GoogleTool');
 const DeslopTool = require('../tools/DeslopTool');
 const DehallucinateTool = require('../tools/DehallucinateTool');
 const PlannerTool = require('../tools/PlannerTool');
@@ -58,8 +58,8 @@ async function main() {
   tools.register(ShellTool);
   tools.register(ReadFileTool);
   tools.register(WriteFileTool);
-  tools.register(EmailTool);
   tools.register(GithubTool);
+  tools.register(GoogleTool);
   tools.register(DeslopTool);
   tools.register(DehallucinateTool);
   tools.register(PlannerTool);
@@ -70,7 +70,7 @@ async function main() {
   // (breaks circular dep — can't inject before Assistant creates InferenceClient)
   PlannerTool.inject(assistant.inference, {
     github: GithubTool,
-    email: EmailTool,
+    google: GoogleTool,
     fetchUrl: WebFetchTool,
   });
   await assistant.initialize();

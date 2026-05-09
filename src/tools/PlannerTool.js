@@ -93,6 +93,7 @@ CUSTOM — use when no named program fits:
     _client = inferenceClient;
     _tools = toolMap || {};
     console.log('[planner] Injected — programs:', Object.keys(PROGRAMS).join(', '), '| tools:', Object.keys(_tools).join(', '));
+    // _tools.google handles email, calendar, docs, sheets
   },
 
   async execute({ complexity_score, reasoning, program, params = {}, tasks = [] }, ctx = {}) {
@@ -136,7 +137,7 @@ CUSTOM — use when no named program fits:
     const { build } = require('../pipeline/programs/CreateGitHubProject');
     const pipeline = build({
       githubTool: _tools.github,
-      emailTool: _tools.email,
+      googleTool: _tools.google,
       githubUsername: githubSettings.username,
     });
 
@@ -175,7 +176,7 @@ CUSTOM — use when no named program fits:
     const { build } = require('../pipeline/programs/UpdateGitHubProject');
     const pipeline = build({
       githubTool: _tools.github,
-      emailTool: _tools.email,
+      googleTool: _tools.google,
       githubUsername: githubSettings.username,
     });
 
