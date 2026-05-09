@@ -9,6 +9,9 @@ dist/
 
 # data/voices/
 data/settings.json
+data/*.db
+data/*.db-wal
+data/*.db-shm
 tts/.venv/
 tts/server.log
 

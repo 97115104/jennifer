@@ -79,16 +79,42 @@ function createSettingsRouter() {
     }
   });
 
-  // GET /api/settings — current settings (no secrets)
+  // GET /api/settings — current settings (secrets masked)
   router.get('/', (req, res) => {
     const s = getSettings().getAll();
+    const inf = s.inference || {};
     res.json({
-      app: s.app,
-      tts: s.tts,
+      app:    s.app,
+      tts:    s.tts,
       google: { connected: s.google.connected, email: s.google.email, name: s.google.name },
       github: { connected: s.github.connected, username: s.github.username, name: s.github.name },
       voices: listVoices(),
+      inference: {
+        provider:           inf.provider || 'openai-compatible',
+        apiUrl:             inf.apiUrl   || '',
+        model:              inf.model    || '',
+        hasApiKey:          !!(inf.apiKey),
+        hasAnthropicKey:    !!(inf.anthropicApiKey),
+        hasGeminiKey:       !!(inf.geminiApiKey),
+      },
     });
+  });
+
+  // POST /api/settings/inference — save AI provider config
+  router.post('/inference', (req, res) => {
+    const { provider, apiUrl, apiKey, model, anthropicApiKey, geminiApiKey } = req.body || {};
+    const MASK = '***';
+    const patch = {
+      provider: ['openai-compatible', 'anthropic', 'gemini'].includes(provider) ? provider : 'openai-compatible',
+      model:    String(model || '').trim(),
+    };
+    if (apiUrl !== undefined)          patch.apiUrl          = String(apiUrl).trim();
+    if (apiKey !== undefined && apiKey !== MASK)          patch.apiKey          = String(apiKey).trim();
+    if (anthropicApiKey !== undefined && anthropicApiKey !== MASK) patch.anthropicApiKey = String(anthropicApiKey).trim();
+    if (geminiApiKey    !== undefined && geminiApiKey    !== MASK) patch.geminiApiKey    = String(geminiApiKey).trim();
+
+    getSettings().set('inference', patch);
+    res.json({ ok: true });
   });
 
   // POST /api/settings/app — update assistant display name and wake word

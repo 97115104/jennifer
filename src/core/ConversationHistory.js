@@ -1,65 +1,56 @@
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-
-const HISTORY_DIR = path.join(__dirname, '../../data/history');
-
-function ensure() {
-  if (!fs.existsSync(HISTORY_DIR)) fs.mkdirSync(HISTORY_DIR, { recursive: true });
-}
+const { getDb } = require('./Database');
 
 const ConversationHistory = {
   save(messages) {
     const turns = messages.filter(m => m.role === 'user' || m.role === 'assistant');
     if (turns.length === 0) return null;
-    ensure();
 
     const id = uuidv4();
     const firstUser = turns.find(m => m.role === 'user');
     const preview = firstUser ? String(firstUser.content).slice(0, 120) : 'Conversation';
+    const stored = messages.filter(m => m.role !== 'system');
 
-    const entry = {
-      id,
-      startTime: new Date().toISOString(),
-      messageCount: turns.length,
-      preview,
-      messages: messages.filter(m => m.role !== 'system'),
-    };
+    getDb().prepare(`
+      INSERT INTO conversation_history (id, start_time, message_count, preview, messages)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(id, new Date().toISOString(), turns.length, preview, JSON.stringify(stored));
 
-    fs.writeFileSync(path.join(HISTORY_DIR, `${id}.json`), JSON.stringify(entry, null, 2));
     console.log(`[history] Saved conversation ${id} (${turns.length} turns)`);
     return id;
   },
 
   list() {
-    ensure();
-    return fs.readdirSync(HISTORY_DIR)
-      .filter(f => f.endsWith('.json'))
-      .map(f => {
-        try {
-          const e = JSON.parse(fs.readFileSync(path.join(HISTORY_DIR, f), 'utf-8'));
-          return { id: e.id, startTime: e.startTime, messageCount: e.messageCount, preview: e.preview };
-        } catch { return null; }
-      })
-      .filter(Boolean)
-      .sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+    return getDb()
+      .prepare('SELECT id, start_time, message_count, preview FROM conversation_history ORDER BY start_time DESC')
+      .all()
+      .map(row => ({
+        id:           row.id,
+        startTime:    row.start_time,
+        messageCount: row.message_count,
+        preview:      row.preview,
+      }));
   },
 
   get(id) {
-    const safe = id.replace(/[^a-zA-Z0-9-]/g, '');
-    const fp = path.join(HISTORY_DIR, `${safe}.json`);
-    if (!fs.existsSync(fp)) return null;
-    return JSON.parse(fs.readFileSync(fp, 'utf-8'));
+    const safe = String(id).replace(/[^a-zA-Z0-9-]/g, '');
+    const row = getDb().prepare('SELECT * FROM conversation_history WHERE id = ?').get(safe);
+    if (!row) return null;
+    return {
+      id:           row.id,
+      startTime:    row.start_time,
+      messageCount: row.message_count,
+      preview:      row.preview,
+      messages:     JSON.parse(row.messages || '[]'),
+    };
   },
 
   delete(id) {
-    const safe = id.replace(/[^a-zA-Z0-9-]/g, '');
-    const fp = path.join(HISTORY_DIR, `${safe}.json`);
-    if (!fs.existsSync(fp)) return false;
-    fs.unlinkSync(fp);
-    return true;
+    const safe = String(id).replace(/[^a-zA-Z0-9-]/g, '');
+    const result = getDb().prepare('DELETE FROM conversation_history WHERE id = ?').run(safe);
+    return result.changes > 0;
   },
 };
 

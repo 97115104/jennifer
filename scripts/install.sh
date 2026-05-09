@@ -139,26 +139,22 @@ ok "Node.js packages installed"
 if [ ! -f "$JENNIFER_ROOT/.env" ]; then
   info "Creating .env from template..."
   cat > "$JENNIFER_ROOT/.env" <<'ENVEOF'
-# 429 Inference API key — get yours at https://429inference.com
-429-API-KEY=your_key_here
-
 # TTS provider: system (macOS say) | coqui (voice cloning — run install.sh first)
 TTS_PROVIDER=system
 
-# OAuth (configure in /settings after starting)
+# OAuth credentials (configure in /settings after starting)
 # GOOGLE_CLIENT_ID=
 # GOOGLE_CLIENT_SECRET=
 # GITHUB_CLIENT_ID=
 # GITHUB_CLIENT_SECRET=
 ENVEOF
-  ok ".env created — add your 429-API-KEY before starting"
+  ok ".env created"
 else
   ok ".env already exists"
 fi
 
-if ! grep -q "^[[:space:]]*429-API-KEY[[:space:]]*=" "$JENNIFER_ROOT/.env"; then
-  warn ".env is missing 429-API-KEY — add it before starting Jennifer"
-fi
+info "AI provider and API keys are configured in the Settings UI (/settings)."
+info "The local database (data/jennifer.db) is created automatically on first start."
 
 # ─── Python + Coqui TTS setup ────────────────────────────────────────────────
 echo ""
@@ -259,6 +255,6 @@ echo -e "${GREEN}  Jennifer installation complete!         ${NC}"
 echo -e "${GREEN}══════════════════════════════════════════${NC}"
 echo ""
 echo "  Next steps:"
-echo "  1. Ensure your 429-API-KEY is in .env"
-echo "  2. Run: ./scripts/deploy-locally.sh"
+echo "  1. Run: ./scripts/deploy-locally.sh"
+echo "  2. Open /settings to configure your AI provider and API keys"
 echo ""

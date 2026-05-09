@@ -42,6 +42,7 @@ async function loadSettings() {
   settings = await settingsRes.json();
   health = await healthRes.json();
   renderApp(settings.app);
+  renderInference(settings.inference);
   renderTTSStatus(settings.tts, health.tts);
   renderVoices(settings.voices, settings.tts);
   renderGoogle(settings.google);
@@ -91,6 +92,75 @@ saveAssistantNameBtn?.addEventListener('click', async () => {
     await loadSettings();
   } catch (err) {
     showToast('Name update failed: ' + err.message, 'error');
+  }
+});
+
+// ─── AI Model Tab ─────────────────────────────────────────────────────────────
+
+const MODEL_HINTS = {
+  'openai-compatible': 'e.g. gpt-oss · gpt-4o · llama-3.3-70b',
+  'anthropic':         'e.g. claude-opus-4-7 · claude-sonnet-4-6 · claude-haiku-4-5-20251001',
+  'gemini':            'e.g. gemini-1.5-flash · gemini-1.5-pro · gemini-2.0-flash-exp',
+};
+
+function renderInference(inf = {}) {
+  const provider = inf.provider || 'openai-compatible';
+  const sel = document.getElementById('inf-provider');
+  if (sel) sel.value = provider;
+
+  const urlEl  = document.getElementById('inf-api-url');
+  const keyEl  = document.getElementById('inf-api-key');
+  const antEl  = document.getElementById('inf-anthropic-key');
+  const gemEl  = document.getElementById('inf-gemini-key');
+  const modEl  = document.getElementById('inf-model');
+  const hintEl = document.getElementById('inf-model-hints');
+
+  if (urlEl) urlEl.value  = inf.apiUrl || '';
+  if (keyEl) keyEl.value  = inf.hasApiKey ? '***' : '';
+  if (antEl) antEl.value  = inf.hasAnthropicKey ? '***' : '';
+  if (gemEl) gemEl.value  = inf.hasGeminiKey    ? '***' : '';
+  if (modEl) modEl.value  = inf.model || '';
+  if (hintEl) hintEl.textContent = MODEL_HINTS[provider] || '';
+
+  _showInfFields(provider);
+}
+
+function _showInfFields(provider) {
+  document.getElementById('inf-openai-fields')?.style.setProperty('display', provider === 'openai-compatible' ? '' : 'none');
+  document.getElementById('inf-anthropic-fields')?.style.setProperty('display', provider === 'anthropic' ? '' : 'none');
+  document.getElementById('inf-gemini-fields')?.style.setProperty('display', provider === 'gemini' ? '' : 'none');
+  const hintEl = document.getElementById('inf-model-hints');
+  if (hintEl) hintEl.textContent = MODEL_HINTS[provider] || '';
+}
+
+document.getElementById('inf-provider')?.addEventListener('change', e => _showInfFields(e.target.value));
+
+document.getElementById('save-inference-btn')?.addEventListener('click', async () => {
+  const provider = document.getElementById('inf-provider')?.value || 'openai-compatible';
+  const body = {
+    provider,
+    model:           document.getElementById('inf-model')?.value.trim()       || '',
+    apiUrl:          document.getElementById('inf-api-url')?.value.trim()     || '',
+    apiKey:          document.getElementById('inf-api-key')?.value.trim()     || '',
+    anthropicApiKey: document.getElementById('inf-anthropic-key')?.value.trim() || '',
+    geminiApiKey:    document.getElementById('inf-gemini-key')?.value.trim()  || '',
+  };
+
+  const resultEl = document.getElementById('inf-save-result');
+  try {
+    const res = await fetch('/api/settings/inference', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    showToast('AI provider settings saved', 'success');
+    if (resultEl) resultEl.textContent = '';
+    await loadSettings();
+  } catch (err) {
+    if (resultEl) resultEl.textContent = err.message;
+    showToast('Save failed: ' + err.message, 'error');
   }
 });
 

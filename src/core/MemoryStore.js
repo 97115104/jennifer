@@ -1,13 +1,9 @@
 'use strict';
 
 const { v4: uuidv4 } = require('uuid');
-const Settings = require('./Settings');
+const { getDb } = require('./Database');
 
 const TYPES = new Set(['email', 'url', 'text']);
-
-function settings() {
-  return Settings.getInstance();
-}
 
 function normalizeKey(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -57,13 +53,35 @@ function normalizeEntry(input, existing = {}) {
   };
 }
 
-function readEntries() {
-  const memory = settings().get('memory') || {};
-  return Array.isArray(memory.entries) ? memory.entries : [];
+function rowToEntry(row) {
+  return {
+    id:        row.id,
+    type:      row.type,
+    key:       row.key_name,
+    value:     row.value,
+    aliases:   JSON.parse(row.aliases || '[]'),
+    note:      row.note || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
-function writeEntries(entries) {
-  settings().set('memory', { entries });
+function readEntries() {
+  return getDb()
+    .prepare('SELECT * FROM memory ORDER BY key_name')
+    .all()
+    .map(rowToEntry);
+}
+
+function writeEntry(entry) {
+  getDb().prepare(`
+    INSERT OR REPLACE INTO memory (id, type, key_name, value, aliases, note, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    entry.id, entry.type, entry.key, entry.value,
+    JSON.stringify(entry.aliases || []), entry.note || '',
+    entry.createdAt, entry.updatedAt
+  );
 }
 
 function list() {
@@ -72,34 +90,31 @@ function list() {
 
 function create(input) {
   const entry = normalizeEntry(input);
-  const entries = readEntries();
-  const duplicate = entries.find(item => normalizeKey(item.key) === normalizeKey(entry.key) && item.type === entry.type);
-  if (duplicate) throw new Error(`A ${entry.type} memory named "${entry.key}" already exists`);
-  writeEntries([...entries, entry]);
+  const existing = getDb().prepare(
+    'SELECT id FROM memory WHERE type = ? AND lower(key_name) = lower(?)'
+  ).get(entry.type, entry.key);
+  if (existing) throw new Error(`A ${entry.type} memory named "${entry.key}" already exists`);
+  writeEntry(entry);
   return entry;
 }
 
 function update(id, input) {
-  const entries = readEntries();
-  const index = entries.findIndex(item => item.id === id);
-  if (index === -1) throw new Error('Memory entry not found');
+  const row = getDb().prepare('SELECT * FROM memory WHERE id = ?').get(id);
+  if (!row) throw new Error('Memory entry not found');
 
-  const next = normalizeEntry(input, entries[index]);
-  const duplicate = entries.find(item =>
-    item.id !== id && item.type === next.type && normalizeKey(item.key) === normalizeKey(next.key)
-  );
+  const next = normalizeEntry(input, rowToEntry(row));
+  const duplicate = getDb().prepare(
+    'SELECT id FROM memory WHERE type = ? AND lower(key_name) = lower(?) AND id != ?'
+  ).get(next.type, next.key, id);
   if (duplicate) throw new Error(`A ${next.type} memory named "${next.key}" already exists`);
 
-  entries[index] = next;
-  writeEntries(entries);
+  writeEntry(next);
   return next;
 }
 
 function remove(id) {
-  const entries = readEntries();
-  const next = entries.filter(item => item.id !== id);
-  if (next.length === entries.length) throw new Error('Memory entry not found');
-  writeEntries(next);
+  const result = getDb().prepare('DELETE FROM memory WHERE id = ?').run(id);
+  if (result.changes === 0) throw new Error('Memory entry not found');
 }
 
 function scoreEntry(entry, query, type = 'any') {
