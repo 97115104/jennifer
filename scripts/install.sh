@@ -237,16 +237,41 @@ if [ -z "$PYTHON_CMD" ]; then
   warn "Python 3.9–3.11 not found — voice cloning requires it"
   if [[ "$OS" == "mac" ]]; then
     warn "Install via Homebrew:  brew install python@3.11"
+    warn "Skipping voice cloning setup."
   elif [[ "$DISTRO" == "arch" ]]; then
-    warn "Arch ships Python 3.12+; install 3.11 via pyenv or the AUR package 'python311':"
-    warn "  pyenv install 3.11  OR  yay -S python311"
+    AUR_HELPER=""
+    for h in yay paru; do command -v "$h" &>/dev/null && AUR_HELPER="$h" && break; done
+
+    if [ -n "$AUR_HELPER" ]; then
+      prompt_reply "Arch ships Python 3.12+; install python311 from AUR via $AUR_HELPER? [y/N] " INSTALL_PY311
+      if no_reply "$INSTALL_PY311"; then
+        info "Installing python311 via $AUR_HELPER..."
+        "$AUR_HELPER" -S --noconfirm python311
+        if command -v python3.11 &>/dev/null; then
+          PYTHON_CMD="python3.11"
+          ok "Python 3.11 installed: $(python3.11 --version)"
+        else
+          warn "python311 installed but python3.11 not found on PATH — skipping voice cloning."
+        fi
+      else
+        warn "Skipping voice cloning setup."
+      fi
+    else
+      warn "No AUR helper found. Install Python 3.11 manually:"
+      warn "  yay -S python311  OR  pyenv install 3.11"
+      warn "Skipping voice cloning setup."
+    fi
   elif [[ "$DISTRO" == "debian" ]]; then
     warn "Install via deadsnakes PPA:"
     warn "  sudo add-apt-repository ppa:deadsnakes/ppa && sudo apt-get update"
     warn "  sudo apt-get install python3.11 python3.11-venv python3.11-dev"
+    warn "Skipping voice cloning setup."
+  else
+    warn "Skipping voice cloning setup."
   fi
-  warn "Skipping voice cloning setup."
-else
+fi
+
+if [ -n "$PYTHON_CMD" ]; then
   prompt_reply "Set up voice cloning (Coqui XTTS v2)? Requires ~4GB disk. [y/N] " SETUP_TTS
   if no_reply "$SETUP_TTS"; then
     [ -f "$TTS_DIR/requirements.txt" ] || err "Missing $TTS_DIR/requirements.txt"
