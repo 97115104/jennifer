@@ -88,7 +88,7 @@ TTS_PROVIDER=system
 
 # For voice cloning (Coqui XTTS v2)
 # COQUI_URL=http://localhost:5123
-# COQUI_SPEAKER_WAV=/path/to/voice_sample.wav
+# COQUI_SPEAKER_WAV=/path/to/voice_sample.wav  # optional; settings UI can manage this
 
 # Email tool (optional)
 # SMTP_HOST=smtp.gmail.com

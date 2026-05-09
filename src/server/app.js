@@ -60,9 +60,15 @@ function createApp(assistant) {
   });
 
   app.get('/api/health', (req, res) => {
+    const activeTTSProvider = assistant.tts?.constructor?.name === 'CoquiTTSProvider' ? 'coqui' : 'system';
+
     res.json({
       status: 'ok',
       version: '1.0.0',
+      tts: {
+        configuredProvider: config.ttsProvider,
+        activeProvider: activeTTSProvider,
+      },
       tools: assistant.tools ? assistant.tools.list() : [],
     });
   });

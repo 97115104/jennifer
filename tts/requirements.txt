@@ -1,7 +1,11 @@
 flask>=2.3.0
 flask-cors>=4.0.0
-TTS>=0.22.0
+TTS==0.22.0
+# TTS 0.22.0 relies on GenerationMixin inherited through PreTrainedModel.
+# transformers 4.50+ removed that path; 4.57+ / 5.x also removed exports used by XTTS.
+transformers>=4.33.0,<4.50.0
 torch>=2.0.0
 torchaudio>=2.0.0
+torchcodec>=0.9.0
 pydub>=0.25.0
 requests>=2.31.0

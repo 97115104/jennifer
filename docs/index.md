@@ -36,7 +36,7 @@ Jennifer is a locally-hosted AI voice assistant built with Node.js. It:
 | TTS | macOS `say` / Linux `espeak` / Coqui XTTS v2 |
 | Tools | fetch_url, execute_shell, read_file, write_file, send_email |
 | API | REST + WebSocket — connects Raspberry Pi and other devices |
-| Voice cloning | Coqui XTTS v2 (compatible with github.com/97115104/myvoice) |
+| Voice cloning | Embedded Coqui XTTS v2 service |
 
 ## Example Queries
 

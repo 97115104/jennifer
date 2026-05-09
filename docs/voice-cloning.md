@@ -7,7 +7,7 @@ nav_order: 5
 # Voice Cloning
 {: .no_toc }
 
-Jennifer can speak in a cloned voice using **Coqui XTTS v2** — the same technology used in [myvoice](https://github.com/97115104/myvoice). No ElevenLabs account or API key required.
+Jennifer can speak in a cloned voice using the embedded **Coqui XTTS v2** service. No ElevenLabs account or API key is required.
 
 <details open markdown="block">
 <summary>Table of contents</summary>
@@ -25,43 +25,43 @@ Text response
      │
      ▼
 CoquiTTSProvider
-     │  POST /tts { text, speaker_wav }
+     │  POST /api/tts { text, voice }
      ▼
-myvoice Flask server (localhost:5123)
+Embedded Flask server: tts/server.py (localhost:5123)
      │  XTTS v2 model (~1.8GB)
      ▼
-WAV audio in cloned voice
+MP3 audio in cloned voice
      │
      ▼
 Browser plays it
 ```
 
-The myvoice server runs locally, generates audio using the XTTS v2 model, and Jennifer streams it back to you — fully offline, no external API calls.
+The embedded server runs locally, generates audio using the XTTS v2 model, and Jennifer streams it back to you.
 
 ---
 
 ## Setup
 
-### 1. Clone and set up myvoice
+### 1. Set up the local TTS environment
 
 ```bash
-git clone https://github.com/97115104/myvoice ~/myvoice
-cd ~/myvoice
-bash setup.sh   # installs Python deps and downloads XTTS v2 model (~1.8GB)
+./scripts/install.sh
 ```
 
-### 2. Record a voice sample
+When prompted, opt into voice cloning. This creates `tts/.venv`, installs the Python dependencies, and can optionally pre-download the XTTS v2 model.
+
+### 2. Record a voice sample in Jennifer
 
 You need 10–30 seconds of clean audio in the voice you want to clone.
 
-- Open [http://localhost:5123](http://localhost:5123) in a browser
-- Use the built-in recorder to capture your voice
-- Save the file — note its path (e.g., `~/myvoice/samples/steve.wav`)
+- Start Jennifer with `./scripts/deploy-locally.sh`
+- Open [http://localhost:3000/settings](http://localhost:3000/settings)
+- Use the Voice Cloning tab to record and activate a voice sample
 
 For best results:
 - Record in a quiet environment
 - Speak naturally, not reading a list
-- Use 16kHz or 44.1kHz WAV
+- Aim for 20–30 seconds of clean speech
 
 ### 3. Configure Jennifer
 
@@ -70,20 +70,17 @@ Add to `.env`:
 ```bash
 TTS_PROVIDER=coqui
 COQUI_URL=http://localhost:5123
-COQUI_SPEAKER_WAV=/Users/you/myvoice/samples/steve.wav
+# Optional if you want to bypass the Settings page active voice:
+COQUI_SPEAKER_WAV=/Users/you/path/to/voice_sample.wav
 ```
 
-### 4. Start myvoice, then start Jennifer
+### 4. Start Jennifer
 
 ```bash
-# Terminal 1 — voice server
-cd ~/myvoice && python server.py
-
-# Terminal 2 — Jennifer
 ./scripts/deploy-locally.sh
 ```
 
-Jennifer will log `[boot] Using Coqui XTTS v2 voice` on startup.
+The deploy script starts `tts/server.py` automatically, waits for XTTS to load, then starts Jennifer. Jennifer logs `[boot] Using Coqui XTTS v2 voice` when the integration is active.
 
 ---
 
@@ -95,7 +92,7 @@ To check which TTS is active:
 
 ```bash
 curl http://localhost:3000/api/health
-# look for "tts" field in response
+# look for tts.activeProvider == "coqui"
 ```
 
 ---
@@ -115,8 +112,10 @@ const payload = { text, language: 'fr' };  // French
 ## Troubleshooting
 
 **"Coqui server unavailable"**
-- Start the myvoice server first: `cd ~/myvoice && python server.py`
-- Check it's running: `curl http://localhost:5123/health`
+- Make sure `.env` says exactly `TTS_PROVIDER=coqui`
+- Re-run `./scripts/install.sh` and opt into voice cloning if `tts/.venv` is missing
+- Check the embedded service: `curl http://localhost:5123/api/health`
+- Check logs: `tail -f tts/server.log`
 
 **Voice sounds robotic or wrong**
 - Use a longer, cleaner voice sample (30+ seconds)
@@ -124,5 +123,5 @@ const payload = { text, language: 'fr' };  // French
 - Avoid background noise in the sample
 
 **First synthesis is slow**
-- XTTS v2 loads the model on first request (~10s on M-series Mac)
-- Subsequent calls are fast (2–5s)
+- XTTS v2 loads the model at startup.
+- CPU synthesis can still take several seconds per short response.

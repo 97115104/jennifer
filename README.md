@@ -56,7 +56,7 @@ Browser (Chrome)
 - **Reasoning model** — 429inference.com `gpt-oss` with chain-of-thought
 - **Tool system** — extensible plugin registry; model picks the right tool
 - **System TTS** — macOS `say` / Linux `espeak` / Windows SAPI out of the box
-- **Voice cloning** — Coqui XTTS v2 via [myvoice](https://github.com/97115104/myvoice) (no ElevenLabs)
+- **Voice cloning** — embedded Coqui XTTS v2 service (no ElevenLabs)
 - **REST + WebSocket API** — connect any device (Raspberry Pi, mobile, etc.)
 
 ---
@@ -142,15 +142,16 @@ Server → { type: "error",      message }
 
 ## Voice Cloning
 
-Set TTS_PROVIDER=coqui in `.env` to use [myvoice](https://github.com/97115104/myvoice) (Coqui XTTS v2):
+Set `TTS_PROVIDER=coqui` in `.env` to use the embedded Coqui XTTS v2 voice-cloning service:
 
 ```bash
 TTS_PROVIDER=coqui
 COQUI_URL=http://localhost:5123
-COQUI_SPEAKER_WAV=/path/to/voice_sample.wav  # 10–30s of clean audio
+# Optional: the Settings page stores recorded voices under data/voices/
+COQUI_SPEAKER_WAV=/path/to/voice_sample.wav
 ```
 
-Run myvoice first: `cd ~/myvoice && python server.py`
+Run `./scripts/install.sh` and opt into voice cloning to create `tts/.venv`. After that, `./scripts/deploy-locally.sh` starts the XTTS service automatically before Jennifer.
 
 See [Voice Cloning docs](https://97115104.github.io/jennifer/voice-cloning) for full setup.
 

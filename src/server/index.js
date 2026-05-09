@@ -21,7 +21,7 @@ async function main() {
   console.log('\n🎙  Jennifer starting up...\n');
 
   // Init settings singleton (loads data/settings.json)
-  Settings.getInstance();
+  const settings = Settings.getInstance();
 
   const stt = new WhisperProvider({ whisperModel: config.whisperModel });
 
@@ -34,13 +34,16 @@ async function main() {
     try {
       await coqui.initialize();
       tts = coqui;
+      settings.set('tts', { provider: 'coqui' });
       console.log('[boot] Using Coqui XTTS v2 voice');
     } catch {
       console.log('[boot] Coqui unavailable — using system TTS');
       tts = new SystemTTSProvider();
+      settings.set('tts', { provider: 'system' });
     }
   } else {
     tts = new SystemTTSProvider();
+    settings.set('tts', { provider: 'system' });
     console.log('[boot] Using system TTS');
   }
 

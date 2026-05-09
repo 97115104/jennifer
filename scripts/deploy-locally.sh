@@ -78,6 +78,14 @@ if ENV_PORT="$(read_dotenv_value PORT)"; then
   export PORT="$ENV_PORT"
 fi
 
+case "${TTS_PROVIDER:-system}" in
+  system|coqui) ;;
+  *)
+    echo "❌  Invalid TTS_PROVIDER='${TTS_PROVIDER}'. Use 'system' or 'coqui'."
+    exit 1
+    ;;
+esac
+
 # ── Coqui TTS server (only when TTS_PROVIDER=coqui) ──────────────────────────
 
 TTS_PID=""

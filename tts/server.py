@@ -32,6 +32,9 @@ from flask_cors import CORS
 import torch
 import torchaudio
 from TTS.api import TTS
+from TTS.config.shared_configs import BaseDatasetConfig
+from TTS.tts.configs.xtts_config import XttsAudioConfig, XttsConfig
+from TTS.tts.models.xtts import XttsArgs
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,6 +47,20 @@ CORS(app)
 
 tts_model = None
 MODEL_NAME = "tts_models/multilingual/multi-dataset/xtts_v2"
+
+
+def allow_trusted_xtts_checkpoint_globals():
+    """Allow Coqui XTTS config classes for PyTorch 2.6+ safe checkpoint load."""
+    add_safe_globals = getattr(torch.serialization, "add_safe_globals", None)
+    if not add_safe_globals:
+        return
+
+    add_safe_globals([
+        BaseDatasetConfig,
+        XttsAudioConfig,
+        XttsArgs,
+        XttsConfig,
+    ])
 
 
 def load_model():
@@ -60,6 +77,7 @@ def load_model():
         logger.info("Using CPU (generation: ~15-30s per sentence)")
 
     try:
+        allow_trusted_xtts_checkpoint_globals()
         tts_model = TTS(MODEL_NAME).to(device)
         logger.info("XTTS v2 model loaded")
         return True

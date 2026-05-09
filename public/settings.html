@@ -182,6 +182,11 @@
       border-color: rgba(255,180,0,0.3);
       color: #e8c84a;
     }
+    .info-banner.success {
+      background: rgba(82,196,122,0.08);
+      border-color: rgba(82,196,122,0.3);
+      color: var(--success);
+    }
     .info-banner code {
       background: rgba(255,255,255,0.1);
       padding: 1px 5px;
@@ -311,11 +316,11 @@
         <div class="config-note">
           <strong>To hear your cloned voice:</strong>
           <ol>
-            <li>Start the myvoice server: <code>cd ~/myvoice && python server.py</code></li>
             <li>Set <code>TTS_PROVIDER=coqui</code> in your <code>.env</code> file</li>
-            <li>Restart Jennifer: stop and run <code>./scripts/deploy-locally.sh</code> again</li>
+            <li>Run <code>./scripts/install.sh</code> and opt into voice cloning if <code>tts/.venv</code> is missing</li>
+            <li>Restart Jennifer with <code>./scripts/deploy-locally.sh</code>; it starts the embedded XTTS v2 service automatically</li>
           </ol>
-          Don't have myvoice? Clone it: <a href="https://github.com/97115104/myvoice" target="_blank">github.com/97115104/myvoice</a>
+          Check <code>tts/server.log</code> if startup falls back to system TTS.
         </div>
       </div>
 

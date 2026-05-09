@@ -30,7 +30,7 @@ http://localhost:3000
 
 ### GET /api/health
 
-Returns server status and list of registered tools.
+Returns server status, active TTS provider, and list of registered tools.
 
 ```bash
 curl http://localhost:3000/api/health
@@ -40,6 +40,10 @@ curl http://localhost:3000/api/health
 {
   "status": "ok",
   "version": "1.0.0",
+  "tts": {
+    "configuredProvider": "coqui",
+    "activeProvider": "coqui"
+  },
   "tools": ["fetch_url", "execute_shell", "read_file", "write_file", "send_email"]
 }
 ```

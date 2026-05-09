@@ -32,11 +32,16 @@ if (params.get('connected') || params.get('error')) {
 // ─── Load Settings ────────────────────────────────────────────────────────────
 
 let settings = {};
+let health = {};
 
 async function loadSettings() {
-  const res = await fetch('/api/settings');
-  settings = await res.json();
-  renderTTSStatus(settings.tts);
+  const [settingsRes, healthRes] = await Promise.all([
+    fetch('/api/settings'),
+    fetch('/api/health'),
+  ]);
+  settings = await settingsRes.json();
+  health = await healthRes.json();
+  renderTTSStatus(settings.tts, health.tts);
   renderVoices(settings.voices, settings.tts);
   renderGoogle(settings.google);
   renderGitHub(settings.github);
@@ -141,25 +146,40 @@ async function uploadVoice(name) {
   }
 }
 
-function renderTTSStatus(tts = {}) {
+function renderTTSStatus(tts = {}, ttsHealth = {}) {
   const el = document.getElementById('tts-status');
   if (!el) return;
 
-  const isSystem = !tts.activeVoice || true; // check env via health
-  fetch('/api/health').then(r => r.json()).then(data => {
-    // We can't easily tell TTS provider from health, so check activeVoice
-    if (tts.activeVoice) {
-      const voiceName = tts.activeVoice.split('/').pop().replace('.wav', '');
-      el.innerHTML = `
-        <div class="info-banner warning">
-          <strong>Active voice: "${voiceName}"</strong><br>
-          To hear this voice, set <code>TTS_PROVIDER=coqui</code> in your <code>.env</code> and restart the server.
-          Your myvoice server must also be running: <code>cd ~/myvoice && python server.py</code>
-        </div>`;
-    } else {
-      el.innerHTML = `<div class="info-banner">Using system TTS (macOS <code>say</code>). Record a voice sample below to enable voice cloning.</div>`;
-    }
-  }).catch(() => {});
+  const active = ttsHealth.activeProvider || tts.provider || 'system';
+  const configured = ttsHealth.configuredProvider || tts.provider || 'system';
+  const voiceName = tts.activeVoice ? tts.activeVoice.split('/').pop().replace('.wav', '') : null;
+
+  if (active === 'coqui' && voiceName) {
+    el.innerHTML = `
+      <div class="info-banner success">
+        <strong>Voice cloning active: "${voiceName}"</strong><br>
+        Jennifer is using the embedded XTTS v2 service at <code>localhost:5123</code>.
+      </div>`;
+    return;
+  }
+
+  if (active === 'coqui') {
+    el.innerHTML = `
+      <div class="info-banner">
+        Voice cloning is running. Record or activate a voice sample below to use it.
+      </div>`;
+    return;
+  }
+
+  const providerHint = configured === 'coqui'
+    ? 'Jennifer was configured for Coqui, but startup fell back to system TTS. Check <code>tts/server.log</code>.'
+    : 'Set <code>TTS_PROVIDER=coqui</code> in <code>.env</code>, then restart Jennifer to enable voice cloning.';
+
+  el.innerHTML = `
+    <div class="info-banner warning">
+      <strong>Using system TTS.</strong><br>
+      ${voiceName ? `Active voice sample: "${voiceName}". ` : ''}${providerHint}
+    </div>`;
 }
 
 function renderVoices(voices = [], tts = {}) {
@@ -191,7 +211,7 @@ async function setActiveVoice(name) {
     body: JSON.stringify({ name }),
   });
   if (res.ok) {
-    showToast(name ? `"${name}" set as active voice — restart server to apply` : 'Voice deactivated', 'success');
+    showToast(name ? `"${name}" set as active voice` : 'Voice deactivated', 'success');
     await loadSettings();
   }
 }
