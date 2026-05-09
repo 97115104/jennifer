@@ -27,6 +27,23 @@ function createApp(assistant) {
 
   app.use(cors());
   app.use(express.json());
+
+  // Content Security Policy — 'unsafe-eval' is required by onnxruntime-web (VAD),
+  // which uses new Function() internally to build WebAssembly worker code at runtime.
+  // All eval-capable scripts are served from 'self' only, limiting the injection surface.
+  app.use((req, res, next) => {
+    res.setHeader('Content-Security-Policy', [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-eval'",
+      "style-src 'self' 'unsafe-inline'",
+      "connect-src 'self' ws: wss:",
+      "img-src 'self' data:",
+      "worker-src 'self' blob:",
+      "media-src 'self' blob:",
+      "object-src 'none'",
+    ].join('; '));
+    next();
+  });
   app.use(session({
     secret: config.sessionSecret,
     resave: false,

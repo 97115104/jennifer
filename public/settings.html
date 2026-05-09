@@ -568,7 +568,7 @@
         <div id="google-services" style="display:none;margin-bottom:14px">
           <div style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:10px;font-weight:600">Services</div>
           <div id="google-service-rows"></div>
-          <button class="btn ghost" id="google-validate-btn" style="margin-top:10px;font-size:0.8rem;padding:6px 14px" onclick="validateGoogleServices()">Validate Access</button>
+          <button class="btn ghost" id="google-validate-btn" style="margin-top:10px;font-size:0.8rem;padding:6px 14px" data-action="validate-google">Validate Access</button>
         </div>
         <div id="google-actions"></div>
 
@@ -624,28 +624,6 @@
 
   <div class="toast" id="toast"></div>
 
-  <script>
-    // Build reading prompt lines
-    const prompts = [
-      "Good morning! How can I help you today?",
-      "Let me look that up for you right away.",
-      "I found the information you were looking for.",
-      "The weather today looks sunny with a light breeze.",
-      "I'll send that email to your contact right now.",
-      "Your calendar shows a meeting scheduled for three o'clock.",
-      "Would you like me to set a reminder for tomorrow morning?",
-      "I can create that GitHub repository for you.",
-      "The quick brown fox jumps over the lazy dog.",
-      "She sells seashells by the seashore.",
-    ];
-    const container = document.getElementById('prompt-lines');
-    prompts.forEach(p => {
-      const el = document.createElement('p');
-      el.className = 'prompt-line';
-      el.textContent = p;
-      container.appendChild(el);
-    });
-  </script>
   <script src="/js/settings.js"></script>
 </body>
 </html>

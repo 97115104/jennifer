@@ -1,5 +1,45 @@
 'use strict';
 
+// ─── Prompt lines (TTS reading samples) ──────────────────────────────────────
+
+(function buildPromptLines() {
+  const container = document.getElementById('prompt-lines');
+  if (!container) return;
+  const prompts = [
+    "Good morning! How can I help you today?",
+    "Let me look that up for you right away.",
+    "I found the information you were looking for.",
+    "The weather today looks sunny with a light breeze.",
+    "I'll send that email to your contact right now.",
+    "Your calendar shows a meeting scheduled for three o'clock.",
+    "Would you like me to set a reminder for tomorrow morning?",
+    "I can create that GitHub repository for you.",
+    "The quick brown fox jumps over the lazy dog.",
+    "She sells seashells by the seashore.",
+  ];
+  prompts.forEach(p => {
+    const el = document.createElement('p');
+    el.className = 'prompt-line';
+    el.textContent = p;
+    container.appendChild(el);
+  });
+})();
+
+// ─── Event delegation for dynamically-injected action buttons ────────────────
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  const action = btn.dataset.action;
+  const name = btn.dataset.name;
+  if (action === 'set-voice') setActiveVoice(name || null);
+  else if (action === 'deactivate-voice') setActiveVoice(null);
+  else if (action === 'delete-voice') deleteVoice(name);
+  else if (action === 'disconnect-google') disconnectGoogle();
+  else if (action === 'disconnect-github') disconnectGitHub();
+  else if (action === 'validate-google') validateGoogleServices();
+});
+
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
 function showToast(msg, type = '') {
@@ -488,11 +528,11 @@ function renderVoices(voices = [], tts = {}) {
         <span class="voice-name">${v.name}</span>
         ${isActive ? '<span class="active-tag">Active</span>' : ''}
         ${!isActive
-          ? `<button class="btn ghost" style="padding:5px 12px;font-size:0.8rem" onclick="setActiveVoice('${v.name}')">Use</button>`
-          : `<button class="btn ghost" style="padding:5px 12px;font-size:0.8rem" onclick="setActiveVoice(null)">Deactivate</button>`
+          ? `<button class="btn ghost" style="padding:5px 12px;font-size:0.8rem" data-action="set-voice" data-name="${v.name}">Use</button>`
+          : `<button class="btn ghost" style="padding:5px 12px;font-size:0.8rem" data-action="deactivate-voice">Deactivate</button>`
         }
         <a class="btn ghost" style="padding:5px 12px;font-size:0.8rem;text-decoration:none" href="/api/settings/voices/${encodeURIComponent(v.name)}/download">Download</a>
-        <button class="btn danger" style="padding:5px 12px;font-size:0.8rem" onclick="deleteVoice('${v.name}')">Delete</button>
+        <button class="btn danger" style="padding:5px 12px;font-size:0.8rem" data-action="delete-voice" data-name="${v.name}">Delete</button>
       </li>`;
   }).join('');
 }
@@ -559,7 +599,7 @@ function renderGoogle(g = {}) {
     status.innerHTML = `<div class="connected-badge"><span>✓</span> Connected as ${g.email || g.name || 'Google account'}</div>`;
     services.style.display = 'block';
     renderServiceRows(null); // show "Checking..." state
-    actions.innerHTML = `<button class="btn danger" onclick="disconnectGoogle()">Disconnect Google</button>`;
+    actions.innerHTML = `<button class="btn danger" data-action="disconnect-google">Disconnect Google</button>`;
     validateGoogleServices(); // auto-validate on render
   } else {
     status.innerHTML = `<div class="disconnected-badge"><span>○</span> Not connected</div>`;
@@ -618,7 +658,7 @@ function renderGitHub(g = {}) {
       <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:10px">
         Jennifer can now create repos, push files, and manage your GitHub projects.
       </p>
-      <button class="btn danger" onclick="disconnectGitHub()">Disconnect GitHub</button>`;
+      <button class="btn danger" data-action="disconnect-github">Disconnect GitHub</button>`;
   } else {
     status.innerHTML = `<div class="disconnected-badge"><span>○</span> Not connected</div>`;
     actions.innerHTML = `

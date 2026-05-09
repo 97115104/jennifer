@@ -100,9 +100,7 @@
 
   <!-- Silero VAD ML model (served locally from node_modules) -->
   <script src="/vad/ort.js"></script>
-  <script>
-    if (window.ort?.env?.wasm) window.ort.env.wasm.wasmPaths = '/vad/';
-  </script>
+  <script src="/js/vad-init.js"></script>
   <script src="/vad/bundle.min.js"></script>
   <script src="/js/app.js"></script>
 </body>
