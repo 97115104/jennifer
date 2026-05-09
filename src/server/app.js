@@ -165,6 +165,7 @@ function attachWebSocket(server, assistant) {
       status: e => send({ type: 'status', ...e }),
       transcript: e => send({ type: 'transcript', ...e }),
       response: e => send({ type: 'response', ...e }),
+      tts_progress: e => send({ type: 'tts_progress', ...e }),
       tool_event: e => send({ type: e.type, ...e }),
     };
 

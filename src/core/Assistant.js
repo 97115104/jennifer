@@ -82,13 +82,40 @@ class Assistant extends EventEmitter {
 
     this.conversation.addAssistant(responseText);
     this.emit('response', { text: responseText });
-    this.emit('status', { state: 'speaking', message: 'Speaking...' });
+
+    const ttsProvider = this.tts?.constructor?.name === 'CoquiTTSProvider' ? 'coqui' : 'system';
+    const ttsStartMessage = ttsProvider === 'coqui' ? 'Generating cloned speech...' : 'Preparing speech...';
+    this.emit('status', { state: 'speaking', message: ttsStartMessage });
+    this.emit('tts_progress', {
+      provider: ttsProvider,
+      phase: 'start',
+      progress: ttsProvider === 'coqui' ? 8 : 0,
+      message: ttsStartMessage,
+    });
 
     const audioPath = path.join(os.tmpdir(), `jennifer_out_${uuidv4()}.mp3`);
     console.log(`[assistant] Synthesizing TTS → ${audioPath}`);
     const t1 = Date.now();
-    await this.tts.synthesize(responseText, audioPath);
-    console.log(`[assistant] TTS done in ${Date.now() - t1}ms`);
+    try {
+      await this.tts.synthesize(responseText, audioPath);
+      const elapsedMs = Date.now() - t1;
+      console.log(`[assistant] TTS done in ${elapsedMs}ms`);
+      this.emit('tts_progress', {
+        provider: ttsProvider,
+        phase: 'ready',
+        progress: 100,
+        message: ttsProvider === 'coqui' ? 'Cloned speech ready' : 'Speech ready',
+        elapsedMs,
+      });
+    } catch (err) {
+      this.emit('tts_progress', {
+        provider: ttsProvider,
+        phase: 'error',
+        progress: 0,
+        message: `Speech generation failed: ${err.message}`,
+      });
+      throw err;
+    }
 
     return { transcript: text, response: responseText, audioPath };
   }

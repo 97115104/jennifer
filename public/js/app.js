@@ -142,6 +142,13 @@ class JenniferApp {
     this.isListeningForSpeech = false;
     this.isSpeaking = false;
     this.recognition = null;
+    this.toolActivity = null;
+    this.ttsProgress = {
+      visible: false,
+      startedAt: 0,
+      progress: 0,
+      timer: null,
+    };
   }
 
   init() {
@@ -226,6 +233,122 @@ class JenniferApp {
     div.textContent = text;
     el.appendChild(div);
     container.scrollTop = container.scrollHeight;
+  }
+
+  _resetToolActivity() {
+    this.toolActivity = null;
+  }
+
+  _toolLabel(name) {
+    const labels = {
+      fetch_url: 'Searching internet',
+      execute_shell: 'Running shell command',
+      read_file: 'Reading file',
+      write_file: 'Writing file',
+      send_email: 'Sending email',
+      github: 'Using GitHub',
+    };
+    return labels[name] || `Running ${name || 'tool'}`;
+  }
+
+  _showToolCall(name) {
+    const container = document.getElementById('transcript-container');
+    const el = document.getElementById('transcript');
+    const label = this._toolLabel(name);
+
+    if (!this.toolActivity?.el) {
+      const div = document.createElement('div');
+      div.className = 'message system-note tool-activity';
+      el.appendChild(div);
+      this.toolActivity = {
+        el: div,
+        count: 0,
+        label,
+      };
+    }
+
+    this.toolActivity.count += 1;
+    if (this.toolActivity.label !== label) {
+      this.toolActivity.label = 'Running tools';
+    }
+
+    const suffix = this.toolActivity.count === 1 ? 'time' : 'times';
+    this.toolActivity.el.textContent = `${this.toolActivity.label} ${this.toolActivity.count} ${suffix}`;
+    container.scrollTop = container.scrollHeight;
+  }
+
+  _showTTSProgress(message = 'Generating cloned speech...', progress = 8) {
+    const panel = document.getElementById('tts-progress');
+    const label = document.getElementById('tts-progress-label');
+    const percent = document.getElementById('tts-progress-percent');
+    const fill = document.getElementById('tts-progress-fill');
+    if (!panel || !label || !percent || !fill) return;
+
+    this.ttsProgress.visible = true;
+    this.ttsProgress.startedAt = Date.now();
+    this.ttsProgress.progress = Math.max(0, Math.min(100, Number(progress) || 0));
+
+    panel.classList.remove('hidden', 'complete', 'error');
+    label.textContent = `${message} 0s`;
+    percent.textContent = `${Math.round(this.ttsProgress.progress)}%`;
+    fill.style.width = `${this.ttsProgress.progress}%`;
+
+    clearInterval(this.ttsProgress.timer);
+    this.ttsProgress.timer = setInterval(() => {
+      if (!this.ttsProgress.visible) return;
+      const elapsed = Math.floor((Date.now() - this.ttsProgress.startedAt) / 1000);
+      this.ttsProgress.progress = Math.min(92, this.ttsProgress.progress + (elapsed < 8 ? 3 : 1));
+      label.textContent = `${message} ${elapsed}s`;
+      percent.textContent = `${Math.round(this.ttsProgress.progress)}%`;
+      fill.style.width = `${this.ttsProgress.progress}%`;
+    }, 1000);
+  }
+
+  _completeTTSProgress(message = 'Cloned speech ready') {
+    const panel = document.getElementById('tts-progress');
+    const label = document.getElementById('tts-progress-label');
+    const percent = document.getElementById('tts-progress-percent');
+    const fill = document.getElementById('tts-progress-fill');
+    if (!panel || !label || !percent || !fill) return;
+
+    clearInterval(this.ttsProgress.timer);
+    this.ttsProgress.timer = null;
+    this.ttsProgress.visible = false;
+    this.ttsProgress.progress = 0;
+    panel.classList.add('complete');
+    label.textContent = message;
+    percent.textContent = '100%';
+    fill.style.width = '100%';
+  }
+
+  _hideTTSProgress(delay = 0) {
+    clearInterval(this.ttsProgress.timer);
+    this.ttsProgress.timer = null;
+    this.ttsProgress.visible = false;
+
+    const panel = document.getElementById('tts-progress');
+    if (!panel) return;
+    setTimeout(() => {
+      panel.classList.add('hidden');
+      panel.classList.remove('complete', 'error');
+    }, delay);
+  }
+
+  _failTTSProgress(message = 'Speech generation failed') {
+    const panel = document.getElementById('tts-progress');
+    const label = document.getElementById('tts-progress-label');
+    const percent = document.getElementById('tts-progress-percent');
+    const fill = document.getElementById('tts-progress-fill');
+    if (!panel || !label || !percent || !fill) return;
+
+    clearInterval(this.ttsProgress.timer);
+    this.ttsProgress.timer = null;
+    this.ttsProgress.visible = false;
+    panel.classList.remove('hidden', 'complete');
+    panel.classList.add('error');
+    label.textContent = message;
+    percent.textContent = '';
+    fill.style.width = '100%';
   }
 
   // ─── Startup ─────────────────────────────────────────────────────────────
@@ -460,6 +583,8 @@ class JenniferApp {
   // ─── Audio send / receive ─────────────────────────────────────────────────
 
   async _sendAudio(blob) {
+    this._resetToolActivity();
+    this._hideTTSProgress();
     const buffer = await blob.arrayBuffer();
     const bytes = new Uint8Array(buffer);
     let binary = '';
@@ -492,11 +617,12 @@ class JenniferApp {
   _onMessage(msg) {
     switch (msg.type) {
       case 'status':
-        if (msg.message) this._setStatus(msg.message);
         if (msg.state && msg.state !== 'idle') this._setState(msg.state);
+        if (msg.message) this._setStatus(msg.message);
         break;
 
       case 'transcript':
+        this._resetToolActivity();
         this._addMessage('user', msg.text);
         break;
 
@@ -505,14 +631,29 @@ class JenniferApp {
         break;
 
       case 'tool_call':
-        this._addNote(`⚙ Running tool: ${msg.name}`);
+        this._showToolCall(msg.name);
+        break;
+
+      case 'tts_progress':
+        if (msg.provider !== 'coqui') break;
+        if (msg.phase === 'start') {
+          this.isSpeaking = true;
+          this._stopWakeWord();
+          this._showTTSProgress(msg.message, msg.progress);
+        } else if (msg.phase === 'ready') {
+          this._completeTTSProgress(msg.message);
+        } else if (msg.phase === 'error') {
+          this._failTTSProgress(msg.message);
+        }
         break;
 
       case 'audio':
         this._setState('speaking');
         this.isSpeaking = true;
         this._stopWakeWord();
+        this._completeTTSProgress('Playing cloned speech');
         this._playAudio(msg.data, msg.mimeType).then(() => {
+          this._hideTTSProgress(400);
           this.isSpeaking = false;
           this._setState('listening');
           this._startWakeWord();
@@ -521,7 +662,10 @@ class JenniferApp {
 
       case 'error':
         this._addNote(`⚠ ${msg.message}`);
+        this._failTTSProgress(msg.message);
+        this._hideTTSProgress(2400);
         this.isListeningForSpeech = false;
+        this.isSpeaking = false;
         this._setState('listening');
         this._startWakeWord();
         break;
@@ -533,6 +677,8 @@ class JenniferApp {
   _reset() {
     this._send({ type: 'reset' });
     document.getElementById('transcript').innerHTML = '';
+    this._resetToolActivity();
+    this._hideTTSProgress();
     this._addNote('Conversation cleared');
   }
 }

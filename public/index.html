@@ -30,6 +30,16 @@
       <div class="dot" id="dot"></div>
     </div>
 
+    <div id="tts-progress" class="tts-progress hidden" aria-live="polite">
+      <div class="tts-progress-meta">
+        <span id="tts-progress-label">Generating cloned speech...</span>
+        <span id="tts-progress-percent">0%</span>
+      </div>
+      <div class="tts-progress-track">
+        <div id="tts-progress-fill" class="tts-progress-fill"></div>
+      </div>
+    </div>
+
     <canvas id="waveform" width="600" height="80"></canvas>
 
     <div id="transcript-container">
