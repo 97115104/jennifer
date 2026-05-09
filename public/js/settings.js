@@ -60,9 +60,15 @@ let mediaStream = null;
 
 const startBtn = document.getElementById('record-start-btn');
 const stopBtn = document.getElementById('record-stop-btn');
+const uploadSourceBtn = document.getElementById('upload-source-btn');
+const voiceFileInput = document.getElementById('voice-file');
 const recIndicator = document.getElementById('rec-indicator');
 const recTimer = document.getElementById('rec-timer');
 const promptsBox = document.getElementById('reading-prompts');
+
+function cleanVoiceName(value) {
+  return (value || '').replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
+}
 
 startBtn.addEventListener('click', async () => {
   const name = document.getElementById('voice-name').value.trim();
@@ -115,13 +121,28 @@ stopBtn.addEventListener('click', () => {
   document.querySelectorAll('.prompt-line').forEach(el => el.classList.remove('active-prompt'));
 });
 
+uploadSourceBtn.addEventListener('click', async () => {
+  const file = voiceFileInput.files?.[0];
+  if (!file) { showToast('Choose an audio source file first', 'error'); return; }
+
+  const typedName = document.getElementById('voice-name').value.trim();
+  const name = cleanVoiceName(typedName || file.name);
+  if (!name) { showToast('Enter a name for this voice source', 'error'); return; }
+
+  await saveVoiceBlob(name, file, file.name || 'source.wav');
+});
+
 async function uploadVoice(name) {
   const blob = new Blob(recordChunks, { type: recorder?.mimeType || 'audio/webm' });
+  await saveVoiceBlob(name, blob, 'sample.webm');
+}
+
+async function saveVoiceBlob(name, blob, filename) {
   console.log(`[settings] Uploading voice "${name}": ${(blob.size / 1024).toFixed(0)}KB`);
   showToast('Uploading and converting voice sample…');
 
   const form = new FormData();
-  form.append('audio', blob, 'sample.webm');
+  form.append('audio', blob, filename);
   form.append('name', name);
 
   try {
@@ -139,6 +160,7 @@ async function uploadVoice(name) {
 
     showToast(`Voice "${savedName}" saved and activated`, 'success');
     document.getElementById('voice-name').value = '';
+    if (voiceFileInput) voiceFileInput.value = '';
     await loadSettings();
   } catch (err) {
     console.error('[settings] Upload failed:', err);
@@ -199,6 +221,7 @@ function renderVoices(voices = [], tts = {}) {
           ? `<button class="btn ghost" style="padding:5px 12px;font-size:0.8rem" onclick="setActiveVoice('${v.name}')">Use</button>`
           : `<button class="btn ghost" style="padding:5px 12px;font-size:0.8rem" onclick="setActiveVoice(null)">Deactivate</button>`
         }
+        <a class="btn ghost" style="padding:5px 12px;font-size:0.8rem;text-decoration:none" href="/api/settings/voices/${encodeURIComponent(v.name)}/download">Download</a>
         <button class="btn danger" style="padding:5px 12px;font-size:0.8rem" onclick="deleteVoice('${v.name}')">Delete</button>
       </li>`;
   }).join('');

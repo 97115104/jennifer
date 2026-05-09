@@ -8,15 +8,27 @@ const ttsProvider = ['system', 'coqui'].includes(requestedTTSProvider)
   ? requestedTTSProvider
   : 'system';
 
+function readIntEnv(name, fallback) {
+  const value = parseInt(process.env[name] || '', 10);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
 const config = {
   apiKey: process.env['429-API-KEY'],
   apiBaseUrl: process.env.API_BASE_URL || 'https://api.429inference.com',
   apiModel: process.env.API_MODEL || 'gpt-oss',
+  apiMaxTokens: readIntEnv('API_MAX_TOKENS', 8192),
+  apiTimeoutMs: readIntEnv('API_TIMEOUT_MS', 120000),
   port: parseInt(process.env.PORT || '3000', 10),
   whisperModel: process.env.WHISPER_MODEL || 'Xenova/whisper-base.en',
   ttsProvider,
   coquiUrl: process.env.COQUI_URL || 'http://localhost:5123',
   coquiSpeakerWav: process.env.COQUI_SPEAKER_WAV || null,
+  ttsTimeoutMs: readIntEnv('TTS_TIMEOUT_MS', 0),
+  fetchMaxChars: readIntEnv('FETCH_MAX_CHARS', 50000),
+  fetchTimeoutMs: readIntEnv('FETCH_TIMEOUT_MS', 45000),
+  queryAudioMaxBytes: readIntEnv('QUERY_AUDIO_MAX_MB', 500) * 1024 * 1024,
+  voiceUploadMaxBytes: readIntEnv('VOICE_UPLOAD_MAX_MB', 500) * 1024 * 1024,
   email: {
     host: process.env.SMTP_HOST || '',
     port: parseInt(process.env.SMTP_PORT || '587', 10),

@@ -59,7 +59,11 @@
     <p class="hint" id="hint">Say <em>"Ok Jennifer"</em> to start, or click Record</p>
   </div>
 
-  <!-- Silero VAD ML model (served from node_modules/@ricky0123/vad-web/dist) -->
+  <!-- Silero VAD ML model (served locally from node_modules) -->
+  <script src="/vad/ort.js"></script>
+  <script>
+    if (window.ort?.env?.wasm) window.ort.env.wasm.wasmPaths = '/vad/';
+  </script>
   <script src="/vad/bundle.min.js"></script>
   <script src="/js/app.js"></script>
 </body>

@@ -19,7 +19,7 @@ function createApp(assistant) {
   const app = express();
   const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 50 * 1024 * 1024 },
+    limits: { fileSize: config.queryAudioMaxBytes },
   });
 
   app.use(cors());

@@ -3,6 +3,7 @@
 const axios = require('axios');
 const fs = require('fs');
 const TTSProvider = require('./TTSProvider');
+const configDefaults = require('../config');
 
 // Integrates with the embedded XTTS v2 server at tts/server.py.
 // API: POST /api/tts { text, voice: "data:audio/wav;base64,...", language, speed }
@@ -11,6 +12,7 @@ class CoquiTTSProvider extends TTSProvider {
     super(config);
     this.serverUrl = config.coquiUrl || 'http://localhost:5123';
     this.speakerWav = config.coquiSpeakerWav || null;
+    this.timeoutMs = config.ttsTimeoutMs ?? configDefaults.ttsTimeoutMs;
   }
 
   async initialize() {
@@ -49,7 +51,7 @@ class CoquiTTSProvider extends TTSProvider {
       speed: 1.0,
     }, {
       responseType: 'arraybuffer',
-      timeout: 180000, // XTTS on CPU can take >60s for long responses
+      timeout: this.timeoutMs, // 0 disables Axios timeout for long cloned-speech generations.
     });
 
     // Server returns MP3 directly

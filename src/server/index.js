@@ -30,6 +30,7 @@ async function main() {
     const coqui = new CoquiTTSProvider({
       coquiUrl: config.coquiUrl,
       coquiSpeakerWav: config.coquiSpeakerWav,
+      ttsTimeoutMs: config.ttsTimeoutMs,
     });
     try {
       await coqui.initialize();

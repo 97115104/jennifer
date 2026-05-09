@@ -2,6 +2,7 @@
 
 const axios = require('axios');
 const https = require('https');
+const config = require('../config');
 
 function htmlToText(html) {
   return html
@@ -55,7 +56,7 @@ const WebFetchTool = {
 
     try {
       const response = await axios.get(url, {
-        timeout: 15000,
+        timeout: config.fetchTimeoutMs,
         headers: HEADERS,
         httpsAgent,
         maxRedirects: 5,
@@ -77,19 +78,19 @@ const WebFetchTool = {
       // JSON response — return formatted
       if (contentType.includes('application/json') || (typeof raw === 'object' && raw !== null)) {
         const text = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
-        return text.slice(0, 6000);
+        return text.length > config.fetchMaxChars ? text.slice(0, config.fetchMaxChars) + '\n\n[content truncated]' : text;
       }
 
       // HTML — extract readable text
       if (contentType.includes('text/html') || String(raw).trimStart().startsWith('<')) {
         const text = htmlToText(String(raw));
         console.log(`[fetch_url] Extracted ${text.length} chars of text`);
-        return text.length > 10000 ? text.slice(0, 10000) + '\n\n[content truncated]' : text;
+        return text.length > config.fetchMaxChars ? text.slice(0, config.fetchMaxChars) + '\n\n[content truncated]' : text;
       }
 
       // Plain text / XML / other
       const text = String(raw).replace(/\s+/g, ' ').trim();
-      return text.length > 6000 ? text.slice(0, 6000) + '\n\n[truncated]' : text;
+      return text.length > config.fetchMaxChars ? text.slice(0, config.fetchMaxChars) + '\n\n[content truncated]' : text;
     } catch (err) {
       const msg = err.response
         ? `HTTP ${err.response.status} from ${url}`

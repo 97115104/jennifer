@@ -175,6 +175,13 @@ See [Raspberry Pi docs](https://97115104.github.io/jennifer/raspberry-pi).
 | `TTS_PROVIDER` | `system` | `system` or `coqui` |
 | `COQUI_URL` | `http://localhost:5123` | Coqui server URL |
 | `COQUI_SPEAKER_WAV` | — | Path to voice sample WAV |
+| `TTS_TIMEOUT_MS` | `0` | Coqui synthesis timeout; `0` disables the client timeout |
+| `API_MAX_TOKENS` | `8192` | Maximum model response tokens |
+| `API_TIMEOUT_MS` | `120000` | Inference request timeout in milliseconds |
+| `FETCH_MAX_CHARS` | `50000` | Maximum readable characters returned by one fetch |
+| `FETCH_TIMEOUT_MS` | `45000` | URL fetch timeout in milliseconds |
+| `QUERY_AUDIO_MAX_MB` | `500` | Maximum uploaded query audio size |
+| `VOICE_UPLOAD_MAX_MB` | `500` | Maximum uploaded voice source size |
 | `WHISPER_MODEL` | `Xenova/whisper-base.en` | Whisper model ID |
 | `SMTP_HOST` | — | SMTP server for email tool |
 | `SMTP_USER` | — | SMTP username |

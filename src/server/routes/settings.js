@@ -7,6 +7,7 @@ const fs = require('fs');
 const os = require('os');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
+const config = require('../../config');
 
 const execFileAsync = promisify(execFile);
 
@@ -15,6 +16,10 @@ function getSettings() {
 }
 
 const VOICES_DIR = path.join(__dirname, '../../../data/voices');
+
+function sanitizeVoiceName(name) {
+  return String(name || '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
+}
 
 function listVoices() {
   if (!fs.existsSync(VOICES_DIR)) return [];
@@ -27,7 +32,7 @@ function createSettingsRouter() {
   const router = express.Router();
   const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 100 * 1024 * 1024 },
+    limits: { fileSize: config.voiceUploadMaxBytes },
   });
 
   if (!fs.existsSync(VOICES_DIR)) fs.mkdirSync(VOICES_DIR, { recursive: true });
@@ -58,7 +63,7 @@ function createSettingsRouter() {
     if (!req.file) return res.status(400).json({ error: 'No audio file provided' });
 
     const rawName = req.body.name || `voice_${Date.now()}`;
-    const name = rawName.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
+    const name = sanitizeVoiceName(rawName) || `voice_${Date.now()}`;
     const tmpPath = path.join(os.tmpdir(), `voice_upload_${Date.now()}`);
     const outPath = path.join(VOICES_DIR, `${name}.wav`);
 
@@ -85,7 +90,7 @@ function createSettingsRouter() {
 
   // POST /api/settings/voices/active — set active voice
   router.post('/voices/active', (req, res) => {
-    const { name } = req.body;
+    const name = sanitizeVoiceName(req.body.name);
     if (!name) {
       getSettings().set('tts', { activeVoice: null });
       return res.json({ ok: true, activeVoice: null });
@@ -97,9 +102,18 @@ function createSettingsRouter() {
     res.json({ ok: true, activeVoice: voicePath });
   });
 
+  // GET /api/settings/voices/:name/download — download the stored WAV source
+  router.get('/voices/:name/download', (req, res) => {
+    const name = sanitizeVoiceName(req.params.name);
+    const voicePath = path.join(VOICES_DIR, `${name}.wav`);
+    if (!name || !fs.existsSync(voicePath)) return res.status(404).json({ error: 'Voice not found' });
+
+    res.download(voicePath, `${name}.wav`);
+  });
+
   // DELETE /api/settings/voices/:name — delete a voice sample
   router.delete('/voices/:name', (req, res) => {
-    const name = req.params.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const name = sanitizeVoiceName(req.params.name);
     const voicePath = path.join(VOICES_DIR, `${name}.wav`);
     if (!fs.existsSync(voicePath)) return res.status(404).json({ error: 'Voice not found' });
 

@@ -22,7 +22,7 @@ class InferenceClient {
         model: this.model,
         messages: history,
         temperature: 0.7,
-        max_tokens: 2048,
+        max_tokens: config.apiMaxTokens,
       };
       if (tools.length > 0) {
         body.tools = tools;
@@ -39,7 +39,7 @@ class InferenceClient {
             Authorization: `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json',
           },
-          timeout: 45000,
+          timeout: config.apiTimeoutMs,
         });
       } catch (err) {
         const status = err.response?.status;

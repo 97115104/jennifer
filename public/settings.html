@@ -89,6 +89,21 @@
       min-width: 180px;
     }
     input[type="text"]:focus { border-color: var(--accent); }
+    input[type="file"] {
+      flex: 1;
+      min-width: 220px;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    input[type="file"]::file-selector-button {
+      margin-right: 10px;
+      padding: 7px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      cursor: pointer;
+    }
 
     .connected-badge {
       display: inline-flex;
@@ -284,7 +299,7 @@
       <div id="tts-status"></div>
 
       <div class="section">
-        <h3>Record Voice Sample</h3>
+        <h3>Voice Source</h3>
 
         <div class="form-row">
           <label>Name</label>
@@ -304,6 +319,14 @@
         <div id="reading-prompts">
           <h4>Read these aloud at a natural pace — aim for 20–30 seconds total</h4>
           <div id="prompt-lines"></div>
+        </div>
+
+        <div class="config-note">
+          <strong>Or upload an existing source file:</strong>
+          <div class="form-row" style="margin:10px 0 0">
+            <input type="file" id="voice-file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.webm,.flac" />
+            <button class="btn ghost" id="upload-source-btn">Upload Source</button>
+          </div>
         </div>
       </div>
 

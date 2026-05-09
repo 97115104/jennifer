@@ -428,8 +428,9 @@ class JenniferApp {
     try {
       this.micVAD = await window.vad.MicVAD.new({
         stream: this.stream,
-        // All VAD assets are served at /vad/ — bundle auto-resolves model + worklet from there
+        // All VAD model, worklet, and ONNX WASM assets are served locally at /vad/.
         baseAssetPath: '/vad/',
+        onnxWASMBasePath: '/vad/',
         // ~1.6s of silence before onSpeechEnd fires (17 frames × 96ms)
         redemptionFrames: 17,
         // Must detect at least 3 speech frames (~290ms) to count as speech
