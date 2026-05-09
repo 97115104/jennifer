@@ -10,10 +10,26 @@ class InferenceClient {
   _getInferenceSettings() {
     try {
       const inf = require('../core/Settings').getInstance().get('inference') || {};
+      const raw = inf.provider || '429-inference';
+      // Normalize legacy value
+      const provider = raw === 'openai-compatible' ? 'custom' : raw;
+
+      // Fixed URLs for managed providers
+      let apiUrl;
+      if (provider === '429-inference')  apiUrl = 'https://api.429inference.com';
+      else if (provider === 'chatgpt')   apiUrl = 'https://api.openai.com';
+      else                               apiUrl = inf.apiUrl || config.apiBaseUrl;
+
+      // Key routing: each provider has its own field; 429 falls back to apiKey for existing installs
+      let apiKey;
+      if (provider === '429-inference')  apiKey = inf.api429Key || inf.apiKey || config.apiKey || '';
+      else if (provider === 'chatgpt')   apiKey = inf.chatgptApiKey || '';
+      else                               apiKey = inf.apiKey || config.apiKey || '';
+
       return {
-        provider:        inf.provider || 'openai-compatible',
-        apiUrl:          inf.apiUrl   || config.apiBaseUrl,
-        apiKey:          inf.apiKey   || config.apiKey || '',
+        provider,
+        apiUrl,
+        apiKey,
         model:           inf.model    || config.apiModel,
         anthropicApiKey: inf.anthropicApiKey || '',
         geminiApiKey:    inf.geminiApiKey    || '',
@@ -22,8 +38,8 @@ class InferenceClient {
       };
     } catch {
       return {
-        provider:  'openai-compatible',
-        apiUrl:    config.apiBaseUrl,
+        provider:  '429-inference',
+        apiUrl:    'https://api.429inference.com',
         apiKey:    config.apiKey || '',
         model:     config.apiModel,
         maxTokens: config.apiMaxTokens,
@@ -45,6 +61,7 @@ class InferenceClient {
       return new GeminiAdapter({ apiKey: inf.geminiApiKey, model: inf.model, maxTokens: inf.maxTokens });
     }
 
+    // 429-inference, chatgpt, and custom all use OpenAI-compatible adapter
     const OpenAIAdapter = require('./adapters/OpenAIAdapter');
     return new OpenAIAdapter({ apiUrl: inf.apiUrl, apiKey: inf.apiKey, model: inf.model, maxTokens: inf.maxTokens, timeoutMs: inf.timeoutMs });
   }

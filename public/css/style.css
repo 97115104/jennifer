@@ -80,6 +80,12 @@ header {
 [data-state="speaking"] .orb  { color: var(--success); filter: drop-shadow(0 0 10px var(--success)); animation: pulse 0.8s ease-in-out infinite; }
 [data-state="listening"] .orb { color: var(--accent); filter: drop-shadow(0 0 6px var(--accent)); }
 
+.header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
 h1 {
   font-size: 2rem;
   font-weight: 700;
@@ -88,6 +94,13 @@ h1 {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+.model-info {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  opacity: 0.8;
 }
 
 .status-bar {

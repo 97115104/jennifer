@@ -97,67 +97,224 @@ saveAssistantNameBtn?.addEventListener('click', async () => {
 
 // ─── AI Model Tab ─────────────────────────────────────────────────────────────
 
-const MODEL_HINTS = {
-  'openai-compatible': 'e.g. gpt-oss · gpt-4o · llama-3.3-70b',
-  'anthropic':         'e.g. claude-opus-4-7 · claude-sonnet-4-6 · claude-haiku-4-5-20251001',
-  'gemini':            'e.g. gemini-2.5-flash · gemini-2.5-pro · gemini-2.0-flash',
+// Per 1M tokens pricing (source: provider websites)
+const PRICING = {
+  'gpt-4o-mini':               { i: 0.15,  o: 0.60  },
+  'gpt-4o':                    { i: 2.50,  o: 10.00 },
+  'gpt-4-turbo':               { i: 10.00, o: 30.00 },
+  'gpt-3.5-turbo':             { i: 0.50,  o: 1.50  },
+  'o1-mini':                   { i: 3.00,  o: 12.00 },
+  'o1':                        { i: 15.00, o: 60.00 },
+  'o3-mini':                   { i: 1.10,  o: 4.40  },
+  'claude-haiku-4-5-20251001': { i: 0.80,  o: 4.00  },
+  'claude-haiku-3-5-20241022': { i: 0.80,  o: 4.00  },
+  'claude-sonnet-4-6':         { i: 3.00,  o: 15.00 },
+  'claude-opus-4-7':           { i: 15.00, o: 75.00 },
+  'gemini-2.5-flash-lite':     { i: 0.10,  o: 0.40  },
+  'gemini-2.0-flash-lite':     { i: 0.075, o: 0.30  },
+  'gemini-2.0-flash':          { i: 0.10,  o: 0.40  },
+  'gemini-2.5-flash':          { i: 0.15,  o: 0.60  },
+  'gemini-2.5-pro':            { i: 1.25,  o: 10.00 },
 };
 
-const MODEL_DEFAULTS = {
-  'openai-compatible': 'gpt-oss',
-  'anthropic':         'claude-sonnet-4-6',
-  'gemini':            'gemini-2.5-flash',
+// ~500 input + 200 output tokens per typical voice turn
+function costPerRequest(modelId) {
+  const p = PRICING[modelId];
+  if (!p) return null;
+  const c = (500 * p.i + 200 * p.o) / 1_000_000;
+  return c < 0.001 ? `~$${c.toFixed(4)}/req` : `~$${c.toFixed(3)}/req`;
+}
+
+const PROVIDER_DEFAULTS = {
+  '429-inference': 'gpt-oss',
+  'chatgpt':       'gpt-4o-mini',
+  'anthropic':     'claude-haiku-4-5-20251001',
+  'gemini':        'gemini-2.5-flash',
+  'custom':        '',
 };
+
+const PRICING_ROWS = {
+  chatgpt: [
+    { id: 'gpt-4o-mini', label: 'GPT-4o mini',  badge: 'Cheapest' },
+    { id: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', badge: '' },
+    { id: 'o3-mini',     label: 'o3 mini',       badge: '' },
+    { id: 'gpt-4o',      label: 'GPT-4o',        badge: '' },
+    { id: 'o1-mini',     label: 'o1 mini',        badge: '' },
+    { id: 'o1',          label: 'o1',             badge: 'Smartest' },
+  ],
+  anthropic: [
+    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5',  badge: 'Cheapest' },
+    { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6', badge: '' },
+    { id: 'claude-opus-4-7',           label: 'Claude Opus 4.7',   badge: 'Smartest' },
+  ],
+  gemini: [
+    { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', badge: 'Cheapest' },
+    { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite', badge: '' },
+    { id: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash',      badge: '' },
+    { id: 'gemini-2.5-pro',        label: 'Gemini 2.5 Pro',        badge: 'Smartest' },
+  ],
+};
+
+function _buildPricingTable(provider) {
+  const rows = PRICING_ROWS[provider];
+  const el = document.getElementById(`pricing-${provider}`);
+  if (!el) return;
+  if (!rows) {
+    el.innerHTML = `<div class="config-note" style="margin-top:8px">See <a href="https://429inference.com/pricing" target="_blank">429inference.com/pricing</a> for rates.</div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div class="pricing-table-inner" style="margin-top:12px">
+      <table>
+        <thead><tr>
+          <th>Model</th>
+          <th>Input /1M</th>
+          <th>Output /1M</th>
+          <th>~Cost/req</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(r => {
+            const p = PRICING[r.id] || {};
+            const inP  = p.i  != null ? `$${p.i}`  : '—';
+            const outP = p.o != null ? `$${p.o}` : '—';
+            const cost = costPerRequest(r.id) || '—';
+            return `<tr>
+              <td>${r.label}${r.badge ? `<span class="pricing-badge">${r.badge}</span>` : ''}</td>
+              <td>${inP}</td><td>${outP}</td>
+              <td class="cost">${cost}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      <div style="font-size:0.72rem;color:var(--text-muted);padding:6px 10px">~req = 500 input + 200 output tokens (typical voice turn)</div>
+    </div>`;
+}
+
+function _showProviderSection(provider) {
+  const MAP = { '429-inference': '429', chatgpt: 'chatgpt', anthropic: 'anthropic', gemini: 'gemini', custom: 'custom' };
+  const active = MAP[provider] || '429';
+  for (const [p, id] of Object.entries(MAP)) {
+    const el = document.getElementById(`inf-${id}-section`);
+    if (el) el.style.display = (p === provider) ? '' : 'none';
+  }
+}
 
 function renderInference(inf = {}) {
-  const provider = inf.provider || 'openai-compatible';
+  const provider = _normalizeProvider(inf.provider || '429-inference');
   const sel = document.getElementById('inf-provider');
   if (sel) sel.value = provider;
 
-  const urlEl  = document.getElementById('inf-api-url');
-  const keyEl  = document.getElementById('inf-api-key');
-  const antEl  = document.getElementById('inf-anthropic-key');
-  const gemEl  = document.getElementById('inf-gemini-key');
-  const modEl  = document.getElementById('inf-model');
-  const hintEl = document.getElementById('inf-model-hints');
+  const fields = {
+    'inf-429-key':       inf.hasApi429Key    ? '***' : '',
+    'inf-chatgpt-key':   inf.hasChatgptKey   ? '***' : '',
+    'inf-anthropic-key': inf.hasAnthropicKey ? '***' : '',
+    'inf-gemini-key':    inf.hasGeminiKey    ? '***' : '',
+    'inf-api-key':       inf.hasApiKey       ? '***' : '',
+    'inf-api-url':       inf.apiUrl          || '',
+  };
+  for (const [id, val] of Object.entries(fields)) {
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  }
 
-  if (urlEl) urlEl.value  = inf.apiUrl || '';
-  if (keyEl) keyEl.value  = inf.hasApiKey ? '***' : '';
-  if (antEl) antEl.value  = inf.hasAnthropicKey ? '***' : '';
-  if (gemEl) gemEl.value  = inf.hasGeminiKey    ? '***' : '';
-  if (modEl) modEl.value  = inf.model || '';
-  if (hintEl) hintEl.textContent = MODEL_HINTS[provider] || '';
-
-  _showInfFields(provider);
+  _showProviderSection(provider);
+  _buildPricingTable('429');
+  _buildPricingTable('chatgpt');
+  _buildPricingTable('anthropic');
+  _buildPricingTable('gemini');
+  _fetchAndPopulateModels(provider, inf.model || '');
 }
 
-function _showInfFields(provider) {
-  document.getElementById('inf-openai-fields')?.style.setProperty('display', provider === 'openai-compatible' ? '' : 'none');
-  document.getElementById('inf-anthropic-fields')?.style.setProperty('display', provider === 'anthropic' ? '' : 'none');
-  document.getElementById('inf-gemini-fields')?.style.setProperty('display', provider === 'gemini' ? '' : 'none');
-  const hintEl = document.getElementById('inf-model-hints');
-  if (hintEl) hintEl.textContent = MODEL_HINTS[provider] || '';
+function _normalizeProvider(p) {
+  if (p === 'openai-compatible') return 'custom';
+  return ['429-inference','chatgpt','anthropic','gemini','custom'].includes(p) ? p : '429-inference';
+}
+
+let _modelsAbortCtrl = null;
+
+async function _fetchAndPopulateModels(provider, currentModel) {
+  const sel  = document.getElementById('inf-model-select');
+  const note = document.getElementById('inf-model-note');
+  if (!sel) return;
+
+  sel.innerHTML = '<option value="">Loading models…</option>';
+  if (note) note.textContent = '';
+
+  if (_modelsAbortCtrl) _modelsAbortCtrl.abort();
+  _modelsAbortCtrl = new AbortController();
+
+  try {
+    const res  = await fetch(`/api/settings/inference/models?provider=${encodeURIComponent(provider)}`, { signal: _modelsAbortCtrl.signal });
+    const data = await res.json();
+
+    if (data.models?.length) {
+      // Sort: known-pricing models cheapest-first, then alphabetical for rest
+      const sorted = [...data.models].sort((a, b) => {
+        const pa = PRICING[a.id], pb = PRICING[b.id];
+        if (pa && pb) return (pa.i + pa.o) - (pb.i + pb.o);
+        if (pa) return -1;
+        if (pb) return  1;
+        return a.id.localeCompare(b.id);
+      });
+
+      sel.innerHTML = sorted.map(m => {
+        const cost  = costPerRequest(m.id);
+        const label = cost ? `${m.id}  (${cost})` : m.id;
+        return `<option value="${m.id}"${m.id === currentModel ? ' selected' : ''}>${label}</option>`;
+      }).join('');
+
+      // If saved model isn't in list, prepend it
+      if (currentModel && !data.models.find(m => m.id === currentModel)) {
+        sel.innerHTML = `<option value="${currentModel}" selected>${currentModel}</option>` + sel.innerHTML;
+      }
+
+      // Auto-select cheapest default if nothing selected
+      if (!sel.value) sel.value = sorted[0]?.id || '';
+
+      if (note) note.textContent = `${data.models.length} models available`;
+    } else {
+      const fallback = currentModel || PROVIDER_DEFAULTS[provider] || '';
+      sel.innerHTML = `<option value="${fallback}">${fallback || 'Save API key first to load models'}</option>`;
+      if (note && data.error) note.textContent = data.error;
+    }
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    const fallback = currentModel || '';
+    sel.innerHTML = `<option value="${fallback}">${fallback || ''}</option>`;
+    if (note) note.textContent = 'Could not load models — save your API key first';
+  }
 }
 
 document.getElementById('inf-provider')?.addEventListener('change', e => {
   const provider = e.target.value;
-  _showInfFields(provider);
-  const modEl = document.getElementById('inf-model');
-  if (modEl && !modEl.value.trim()) {
-    modEl.value = MODEL_DEFAULTS[provider] || '';
-  }
+  _showProviderSection(provider);
+  _fetchAndPopulateModels(provider, PROVIDER_DEFAULTS[provider] || '');
+});
+
+document.getElementById('inf-refresh-models-btn')?.addEventListener('click', () => {
+  const provider = document.getElementById('inf-provider')?.value || '429-inference';
+  const current  = document.getElementById('inf-model-select')?.value || '';
+  _fetchAndPopulateModels(provider, current);
 });
 
 document.getElementById('save-inference-btn')?.addEventListener('click', async () => {
-  const provider = document.getElementById('inf-provider')?.value || 'openai-compatible';
-  const body = {
-    provider,
-    model:           document.getElementById('inf-model')?.value.trim()       || '',
-    apiUrl:          document.getElementById('inf-api-url')?.value.trim()     || '',
-    apiKey:          document.getElementById('inf-api-key')?.value.trim()     || '',
-    anthropicApiKey: document.getElementById('inf-anthropic-key')?.value.trim() || '',
-    geminiApiKey:    document.getElementById('inf-gemini-key')?.value.trim()  || '',
+  const provider = document.getElementById('inf-provider')?.value || '429-inference';
+  const model    = document.getElementById('inf-model-select')?.value || PROVIDER_DEFAULTS[provider] || '';
+  const MASK = '***';
+
+  const body = { provider, model };
+  const keyFields = {
+    api429Key:       'inf-429-key',
+    chatgptApiKey:   'inf-chatgpt-key',
+    anthropicApiKey: 'inf-anthropic-key',
+    geminiApiKey:    'inf-gemini-key',
+    apiKey:          'inf-api-key',
+    apiUrl:          'inf-api-url',
   };
+  for (const [field, id] of Object.entries(keyFields)) {
+    const val = document.getElementById(id)?.value.trim() || '';
+    if (val !== MASK) body[field] = val;
+  }
 
   const resultEl = document.getElementById('inf-save-result');
   try {
@@ -171,6 +328,8 @@ document.getElementById('save-inference-btn')?.addEventListener('click', async (
     showToast('AI provider settings saved', 'success');
     if (resultEl) resultEl.textContent = '';
     await loadSettings();
+    // Refresh model list after saving (key may have changed)
+    setTimeout(() => _fetchAndPopulateModels(provider, model), 300);
   } catch (err) {
     if (resultEl) resultEl.textContent = err.message;
     showToast('Save failed: ' + err.message, 'error');

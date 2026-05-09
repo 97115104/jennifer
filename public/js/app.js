@@ -167,10 +167,49 @@ class JenniferApp {
       const res = await fetch('/api/settings');
       const data = await res.json();
       this._setAssistantName(data.app?.name || 'Jennifer');
+      this._updateModelInfo(data.inference || {});
     } catch (err) {
       console.warn('[jennifer] Settings load failed:', err.message);
       this._setAssistantName('Jennifer');
     }
+  }
+
+  _updateModelInfo(inf) {
+    const el = document.getElementById('model-info');
+    if (!el) return;
+    const LABELS = {
+      '429-inference': '429',
+      'chatgpt':       'ChatGPT',
+      'anthropic':     'Anthropic',
+      'gemini':        'Gemini',
+      'custom':        'Custom',
+      'openai-compatible': 'Custom',
+    };
+    const PRICING = {
+      'gpt-4o-mini':               { i: 0.15,  o: 0.60  },
+      'gpt-4o':                    { i: 2.50,  o: 10.00 },
+      'claude-haiku-4-5-20251001': { i: 0.80,  o: 4.00  },
+      'claude-haiku-3-5-20241022': { i: 0.80,  o: 4.00  },
+      'claude-sonnet-4-6':         { i: 3.00,  o: 15.00 },
+      'claude-opus-4-7':           { i: 15.00, o: 75.00 },
+      'gemini-2.5-flash-lite':     { i: 0.10,  o: 0.40  },
+      'gemini-2.0-flash-lite':     { i: 0.075, o: 0.30  },
+      'gemini-2.0-flash':          { i: 0.10,  o: 0.40  },
+      'gemini-2.5-flash':          { i: 0.15,  o: 0.60  },
+      'gemini-2.5-pro':            { i: 1.25,  o: 10.00 },
+      'o1-mini':                   { i: 3.00,  o: 12.00 },
+      'o3-mini':                   { i: 1.10,  o: 4.40  },
+    };
+    const provider = inf.provider || '';
+    const model    = inf.model    || '';
+    const label    = LABELS[provider] || provider;
+    let costStr = '';
+    const p = PRICING[model];
+    if (p) {
+      const c = (500 * p.i + 200 * p.o) / 1_000_000;
+      costStr = ` · ~$${c < 0.001 ? c.toFixed(4) : c.toFixed(3)}/req`;
+    }
+    el.textContent = provider && model ? `${label} · ${model}${costStr}` : (label || '');
   }
 
   _setAssistantName(name) {

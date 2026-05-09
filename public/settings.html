@@ -307,6 +307,63 @@
     .service-badge.ok       { background: rgba(82,196,122,0.12); border: 1px solid var(--success); color: var(--success); }
     .service-badge.missing  { background: rgba(224,82,82,0.1);   border: 1px solid var(--danger);  color: var(--danger); }
     .service-badge.checking { background: rgba(107,119,148,0.1); border: 1px solid var(--border);  color: var(--text-muted); }
+
+    .inf-select {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text);
+      font-size: 0.875rem;
+      outline: none;
+    }
+    .inf-select:focus { border-color: var(--accent); }
+
+    .provider-section { margin-top: 4px; }
+
+    .pricing-table-inner {
+      margin-top: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .pricing-table-inner table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    .pricing-table-inner th {
+      text-align: left;
+      padding: 7px 10px;
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: rgba(255,255,255,0.02);
+      border-bottom: 1px solid var(--border);
+    }
+    .pricing-table-inner th:not(:first-child) { text-align: right; }
+    .pricing-table-inner td {
+      padding: 7px 10px;
+      border-top: 1px solid var(--border);
+      color: var(--text);
+    }
+    .pricing-table-inner tr:first-child td { border-top: none; }
+    .pricing-table-inner td:not(:first-child) { text-align: right; color: var(--text-muted); }
+    .pricing-table-inner td.cost { color: var(--success); }
+    .pricing-badge {
+      display: inline-block;
+      font-size: 0.68rem;
+      background: rgba(79,142,247,0.12);
+      border: 1px solid rgba(79,142,247,0.3);
+      color: var(--accent);
+      border-radius: 8px;
+      padding: 1px 6px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
   </style>
 </head>
 <body>
@@ -355,49 +412,88 @@
 
         <div class="form-row">
           <label>Provider</label>
-          <select id="inf-provider" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-size:0.875rem;outline:none">
-            <option value="openai-compatible">OpenAI-Compatible</option>
+          <select id="inf-provider" class="inf-select">
+            <option value="429-inference">429 Inference</option>
+            <option value="chatgpt">ChatGPT (OpenAI)</option>
             <option value="anthropic">Anthropic (Claude)</option>
             <option value="gemini">Google Gemini</option>
+            <option value="custom">Custom (OpenAI-Compatible)</option>
           </select>
         </div>
 
-        <!-- OpenAI-compatible fields -->
-        <div id="inf-openai-fields">
+        <!-- ── 429 Inference ── -->
+        <div id="inf-429-section" class="provider-section">
+          <div class="form-row">
+            <label>API Key</label>
+            <input type="text" id="inf-429-key" placeholder="429_..." autocomplete="off" />
+          </div>
+          <div class="config-note">
+            Get your key at <a href="https://429inference.com" target="_blank">429inference.com</a>
+            · Endpoint: <code>https://api.429inference.com</code>
+          </div>
+          <div id="pricing-429"></div>
+        </div>
+
+        <!-- ── ChatGPT ── -->
+        <div id="inf-chatgpt-section" class="provider-section" style="display:none">
+          <div class="form-row">
+            <label>API Key</label>
+            <input type="text" id="inf-chatgpt-key" placeholder="sk-..." autocomplete="off" />
+          </div>
+          <div class="config-note">
+            Get your key at <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a>
+          </div>
+          <div id="pricing-chatgpt"></div>
+        </div>
+
+        <!-- ── Anthropic ── -->
+        <div id="inf-anthropic-section" class="provider-section" style="display:none">
+          <div class="form-row">
+            <label>API Key</label>
+            <input type="text" id="inf-anthropic-key" placeholder="sk-ant-..." autocomplete="off" />
+          </div>
+          <div class="config-note">
+            Get your key at <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a>
+          </div>
+          <div id="pricing-anthropic"></div>
+        </div>
+
+        <!-- ── Google Gemini ── -->
+        <div id="inf-gemini-section" class="provider-section" style="display:none">
+          <div class="form-row">
+            <label>API Key</label>
+            <input type="text" id="inf-gemini-key" placeholder="AIza..." autocomplete="off" />
+          </div>
+          <div class="config-note">
+            Get your key at <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a>
+          </div>
+          <div id="pricing-gemini"></div>
+        </div>
+
+        <!-- ── Custom ── -->
+        <div id="inf-custom-section" class="provider-section" style="display:none">
           <div class="form-row">
             <label>API URL</label>
-            <input type="text" id="inf-api-url" placeholder="https://api.429inference.com" autocomplete="off" />
+            <input type="text" id="inf-api-url" placeholder="https://api.example.com" autocomplete="off" />
           </div>
           <div class="form-row">
             <label>API Key</label>
             <input type="text" id="inf-api-key" placeholder="Paste API key..." autocomplete="off" />
           </div>
-        </div>
-
-        <!-- Anthropic fields -->
-        <div id="inf-anthropic-fields" style="display:none">
-          <div class="form-row">
-            <label>API Key</label>
-            <input type="text" id="inf-anthropic-key" placeholder="sk-ant-..." autocomplete="off" />
+          <div class="config-note">
+            Any OpenAI-compatible server. Requires <code>/v1/models</code> and <code>/v1/chat/completions</code>.
           </div>
-          <div class="config-note">Get your key at <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a></div>
         </div>
 
-        <!-- Gemini fields -->
-        <div id="inf-gemini-fields" style="display:none">
-          <div class="form-row">
-            <label>API Key</label>
-            <input type="text" id="inf-gemini-key" placeholder="AIza..." autocomplete="off" />
-          </div>
-          <div class="config-note">Get your key at <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a></div>
-        </div>
-
-        <div class="form-row">
+        <!-- ── Model selector ── -->
+        <div class="form-row" style="margin-top:14px">
           <label>Model</label>
-          <input type="text" id="inf-model" placeholder="e.g. gpt-oss, claude-opus-4-7, gemini-1.5-flash" autocomplete="off" />
+          <select id="inf-model-select" class="inf-select">
+            <option value="">Save API key to load models…</option>
+          </select>
+          <button class="btn ghost" id="inf-refresh-models-btn" style="padding:8px 11px;font-size:1rem;line-height:1" title="Refresh model list">↻</button>
         </div>
-
-        <div id="inf-model-hints" class="config-note" style="margin-top:-4px"></div>
+        <div id="inf-model-note" class="config-note" style="margin-top:4px"></div>
 
         <div class="form-row" style="margin-top:16px">
           <button class="btn primary" id="save-inference-btn">Save</button>

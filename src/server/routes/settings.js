@@ -38,6 +38,87 @@ function listVoices() {
     .map(f => ({ name: f.replace('.wav', '') }));
 }
 
+async function _fetchModelsForProvider(provider, inf) {
+  const norm = provider === 'openai-compatible' ? 'custom' : provider;
+
+  if (norm === '429-inference') {
+    const key = inf.api429Key || inf.apiKey || '';
+    if (!key) return { models: [], error: 'API key not configured — save your key first' };
+    try {
+      const res = await axios.get('https://api.429inference.com/v1/models', {
+        headers: { Authorization: `Bearer ${key}` }, timeout: 8000,
+      });
+      return { models: (res.data?.data || []).map(m => ({ id: m.id })).sort((a, b) => a.id.localeCompare(b.id)) };
+    } catch (err) {
+      return { models: [], error: err.response?.data?.error?.message || err.message };
+    }
+  }
+
+  if (norm === 'chatgpt') {
+    const key = inf.chatgptApiKey || '';
+    if (!key) return { models: [], error: 'ChatGPT API key not configured — save your key first' };
+    try {
+      const res = await axios.get('https://api.openai.com/v1/models', {
+        headers: { Authorization: `Bearer ${key}` }, timeout: 8000,
+      });
+      const models = (res.data?.data || [])
+        .filter(m => /^(gpt-|o\d)/.test(m.id))
+        .map(m => ({ id: m.id }))
+        .sort((a, b) => a.id.localeCompare(b.id));
+      return { models };
+    } catch (err) {
+      return { models: [], error: err.response?.data?.error?.message || err.message };
+    }
+  }
+
+  if (norm === 'anthropic') {
+    const key = inf.anthropicApiKey || '';
+    if (!key) return { models: [], error: 'Anthropic API key not configured — save your key first' };
+    try {
+      const res = await axios.get('https://api.anthropic.com/v1/models', {
+        headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, timeout: 8000,
+      });
+      return { models: (res.data?.data || []).map(m => ({ id: m.id })).sort((a, b) => a.id.localeCompare(b.id)) };
+    } catch (err) {
+      return { models: [], error: err.response?.data?.error?.message || err.message };
+    }
+  }
+
+  if (norm === 'gemini') {
+    const key = inf.geminiApiKey || '';
+    if (!key) return { models: [], error: 'Gemini API key not configured — save your key first' };
+    try {
+      const res = await axios.get(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`,
+        { timeout: 8000 }
+      );
+      const models = (res.data?.models || [])
+        .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+        .map(m => ({ id: m.name.replace('models/', '') }))
+        .sort((a, b) => a.id.localeCompare(b.id));
+      return { models };
+    } catch (err) {
+      return { models: [], error: err.response?.data?.error?.message || err.message };
+    }
+  }
+
+  if (norm === 'custom') {
+    const apiUrl = inf.apiUrl || '';
+    const key = inf.apiKey || '';
+    if (!apiUrl) return { models: [], error: 'API URL not configured' };
+    try {
+      const res = await axios.get(`${apiUrl.replace(/\/$/, '')}/v1/models`, {
+        headers: key ? { Authorization: `Bearer ${key}` } : {}, timeout: 8000,
+      });
+      return { models: (res.data?.data || []).map(m => ({ id: m.id })).sort((a, b) => a.id.localeCompare(b.id)) };
+    } catch (err) {
+      return { models: [], error: err.message };
+    }
+  }
+
+  return { models: [], error: 'Unknown provider' };
+}
+
 function createSettingsRouter() {
   const router = express.Router();
   const upload = multer({
@@ -79,10 +160,24 @@ function createSettingsRouter() {
     }
   });
 
+  // GET /api/settings/inference/models — fetch available models for a provider
+  router.get('/inference/models', async (req, res) => {
+    const provider = req.query.provider || getSettings().get('inference')?.provider || '429-inference';
+    const inf = getSettings().get('inference') || {};
+    const result = await _fetchModelsForProvider(provider, inf);
+    res.json(result);
+  });
+
   // GET /api/settings — current settings (secrets masked)
   router.get('/', (req, res) => {
     const s = getSettings().getAll();
     const inf = s.inference || {};
+    const raw = inf.provider || '429-inference';
+    let provider = raw === 'openai-compatible' ? 'custom' : raw;
+    // Auto-detect legacy 429 setup: openai-compatible + 429inference.com URL → show as 429-inference
+    if (provider === 'custom' && (inf.apiUrl || '').includes('429inference.com')) {
+      provider = '429-inference';
+    }
     res.json({
       app:    s.app,
       tts:    s.tts,
@@ -90,26 +185,31 @@ function createSettingsRouter() {
       github: { connected: s.github.connected, username: s.github.username, name: s.github.name },
       voices: listVoices(),
       inference: {
-        provider:           inf.provider || 'openai-compatible',
-        apiUrl:             inf.apiUrl   || '',
-        model:              inf.model    || '',
-        hasApiKey:          !!(inf.apiKey),
-        hasAnthropicKey:    !!(inf.anthropicApiKey),
-        hasGeminiKey:       !!(inf.geminiApiKey),
+        provider,
+        apiUrl:          inf.apiUrl  || '',
+        model:           inf.model   || '',
+        hasApi429Key:    !!(inf.api429Key || (provider === '429-inference' && inf.apiKey)),
+        hasChatgptKey:   !!(inf.chatgptApiKey),
+        hasAnthropicKey: !!(inf.anthropicApiKey),
+        hasGeminiKey:    !!(inf.geminiApiKey),
+        hasApiKey:       !!(inf.apiKey),
       },
     });
   });
 
   // POST /api/settings/inference — save AI provider config
   router.post('/inference', (req, res) => {
-    const { provider, apiUrl, apiKey, model, anthropicApiKey, geminiApiKey } = req.body || {};
+    const { provider, apiUrl, apiKey, api429Key, chatgptApiKey, model, anthropicApiKey, geminiApiKey } = req.body || {};
+    const VALID = ['429-inference', 'chatgpt', 'anthropic', 'gemini', 'custom', 'openai-compatible'];
     const MASK = '***';
     const patch = {
-      provider: ['openai-compatible', 'anthropic', 'gemini'].includes(provider) ? provider : 'openai-compatible',
+      provider: VALID.includes(provider) ? provider : '429-inference',
       model:    String(model || '').trim(),
     };
-    if (apiUrl !== undefined)          patch.apiUrl          = String(apiUrl).trim();
-    if (apiKey !== undefined && apiKey !== MASK)          patch.apiKey          = String(apiKey).trim();
+    if (apiUrl          !== undefined)             patch.apiUrl          = String(apiUrl).trim();
+    if (apiKey          !== undefined && apiKey          !== MASK) patch.apiKey          = String(apiKey).trim();
+    if (api429Key       !== undefined && api429Key       !== MASK) patch.api429Key       = String(api429Key).trim();
+    if (chatgptApiKey   !== undefined && chatgptApiKey   !== MASK) patch.chatgptApiKey   = String(chatgptApiKey).trim();
     if (anthropicApiKey !== undefined && anthropicApiKey !== MASK) patch.anthropicApiKey = String(anthropicApiKey).trim();
     if (geminiApiKey    !== undefined && geminiApiKey    !== MASK) patch.geminiApiKey    = String(geminiApiKey).trim();
 
