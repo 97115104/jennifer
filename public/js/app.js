@@ -1,49 +1,130 @@
 'use strict';
 
-// ─── Voice Activity Detector ──────────────────────────────────────────────────
-//
-// Real services (Siri, Google, Alexa) use trained VAD models that look at the
-// 300–3400Hz speech frequency band and compare it to an adaptive noise floor.
-// We replicate this in the browser without ML:
-//   1. Only measure energy in the speech band (ignores HVAC, fans, etc.)
-//   2. Adaptive noise floor: slowly drifts toward ambient level during silence
-//   3. Speech = energy at least SNR_THRESHOLD × above the noise floor
-//   4. Silence countdown only begins AFTER speech has been detected
-//      (so an accidental wake-word trigger that produces no speech auto-cancels)
-//
-class SpeechVAD {
-  constructor(analyser, sampleRate) {
-    const binWidth = sampleRate / analyser.fftSize;
-    this.lowBin  = Math.max(1, Math.round(300  / binWidth));   // ~300Hz
-    this.highBin = Math.min(analyser.frequencyBinCount - 1, Math.round(3400 / binWidth)); // ~3400Hz
-    this.analyser = analyser;
-    this.buf = new Uint8Array(analyser.frequencyBinCount);
+// Encode a Float32Array of 16kHz mono audio as a WAV ArrayBuffer.
+// vad.utils.encodeWAV exists in some bundle versions; we keep our own copy
+// so behaviour is always consistent regardless of bundle version.
+function encodeWAV(samples) {
+  const SR = 16000;
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
 
-    this.noiseFloor = null;
-    this.SNR_THRESHOLD = 2.2;   // speech must be 2.2× above noise floor
-    this.ABS_THRESHOLD = 12;    // and above this absolute minimum energy
-    this.NOISE_ADAPT   = 0.02;  // noise floor adaptation speed (0=never, 1=instant)
+  function write(off, str) {
+    for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i));
   }
 
-  measure() {
-    this.analyser.getByteFrequencyData(this.buf);
+  write(0,  'RIFF');
+  view.setUint32( 4, 36 + samples.length * 2, true);
+  write(8,  'WAVE');
+  write(12, 'fmt ');
+  view.setUint32(16, 16, true);       // PCM chunk size
+  view.setUint16(20,  1, true);       // PCM format
+  view.setUint16(22,  1, true);       // mono
+  view.setUint32(24, SR, true);
+  view.setUint32(28, SR * 2, true);   // byte rate
+  view.setUint16(32,  2, true);       // block align
+  view.setUint16(34, 16, true);       // bit depth
+  write(36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+  return buffer;
+}
+
+// ─── Frequency-domain VAD fallback ───────────────────────────────────────────
+// Used when Silero/ONNX VAD fails (e.g. SES lockdown from MetaMask extension).
+// Monitors RMS energy via AnalyserNode; starts recording on speech, stops after silence.
+
+class SpeechVAD {
+  constructor(analyser, stream, onSpeech) {
+    this.analyser = analyser;
+    this.stream = stream;
+    this.onSpeech = onSpeech;
+    this.running = false;
+    this.recording = false;
+    this.recorder = null;
+    this.chunks = [];
+    this.silenceTimer = null;
+    this.noiseFloor = 0.003;
+    this.speechStart = 0;
+    this.SPEECH_THRESHOLD = 0.018;
+    this.SILENCE_MS = 1400;
+    this.MIN_SPEECH_MS = 300;
+  }
+
+  start() {
+    this.running = true;
+    this._poll();
+  }
+
+  stop() {
+    this.running = false;
+    clearTimeout(this.silenceTimer);
+    this.silenceTimer = null;
+    if (this.recorder?.state === 'recording') this.recorder.stop();
+  }
+
+  _rms() {
+    const buf = new Float32Array(this.analyser.fftSize);
+    this.analyser.getFloatTimeDomainData(buf);
     let sum = 0;
-    for (let i = this.lowBin; i < this.highBin; i++) sum += this.buf[i];
-    const energy = sum / (this.highBin - this.lowBin);
+    for (const s of buf) sum += s * s;
+    return Math.sqrt(sum / buf.length);
+  }
 
-    if (this.noiseFloor === null) this.noiseFloor = energy;
+  _poll() {
+    if (!this.running) return;
+    const level = this._rms();
 
-    const isSpeech = energy > this.ABS_THRESHOLD && energy > this.noiseFloor * this.SNR_THRESHOLD;
+    // Slow-adapt noise floor while silent
+    if (!this.recording) this.noiseFloor = this.noiseFloor * 0.97 + level * 0.03;
 
-    // Only adapt noise floor during non-speech — don't let loud speech raise it
-    if (!isSpeech) {
-      this.noiseFloor += (energy - this.noiseFloor) * this.NOISE_ADAPT;
+    const threshold = this.noiseFloor + this.SPEECH_THRESHOLD;
+
+    if (!this.recording && level > threshold) {
+      this._startRec();
+    } else if (this.recording) {
+      if (level < threshold * 0.55) {
+        if (!this.silenceTimer) {
+          this.silenceTimer = setTimeout(() => this._stopRec(), this.SILENCE_MS);
+        }
+      } else {
+        clearTimeout(this.silenceTimer);
+        this.silenceTimer = null;
+      }
     }
 
-    return { energy, isSpeech, noiseFloor: this.noiseFloor };
+    setTimeout(() => this._poll(), 30);
   }
 
-  reset() { this.noiseFloor = null; }
+  _startRec() {
+    this.chunks = [];
+    this.recording = true;
+    this.speechStart = Date.now();
+    const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
+      .find(t => MediaRecorder.isTypeSupported(t)) || '';
+    this.recorder = new MediaRecorder(this.stream, mimeType ? { mimeType } : undefined);
+    this.recorder.ondataavailable = e => { if (e.data.size > 0) this.chunks.push(e.data); };
+    this.recorder.onstop = () => {
+      if (Date.now() - this.speechStart >= this.MIN_SPEECH_MS) {
+        const blob = new Blob(this.chunks, { type: this.recorder.mimeType || 'audio/webm' });
+        this.onSpeech(blob);
+      }
+    };
+    this.recorder.start(100);
+    console.log('[jennifer] SpeechVAD: recording started');
+  }
+
+  _stopRec() {
+    clearTimeout(this.silenceTimer);
+    this.silenceTimer = null;
+    this.recording = false;
+    this.running = false;
+    if (this.recorder?.state === 'recording') this.recorder.stop();
+    console.log('[jennifer] SpeechVAD: recording stopped');
+  }
 }
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
@@ -51,24 +132,16 @@ class SpeechVAD {
 class JenniferApp {
   constructor() {
     this.ws = null;
-    this.recognition = null;
-    this.recorder = null;
+    this.micVAD = null;
+    this.speechVAD = null;  // frequency-domain fallback
     this.audioContext = null;
     this.analyser = null;
-    this.vad = null;
     this.stream = null;
 
     this.state = 'idle';
-    this.isRecording = false;
+    this.isListeningForSpeech = false;
     this.isSpeaking = false;
-
-    // VAD state — reset each recording session
-    this.hasSpeech = false;    // has any speech been detected this session?
-    this.silenceStart = null;  // when silence began (after speech was detected)
-
-    // How long silence must persist after speech ends before we stop.
-    // 1500ms matches most voice assistants. Increase if you get cut off mid-sentence.
-    this.SILENCE_DURATION = 1500;
+    this.recognition = null;
   }
 
   init() {
@@ -114,7 +187,7 @@ class JenniferApp {
   _bindUI() {
     document.getElementById('start-btn').addEventListener('click', () => this._start());
     document.getElementById('reset-btn').addEventListener('click', () => this._reset());
-    document.getElementById('manual-btn').addEventListener('click', () => this._triggerRecord());
+    document.getElementById('manual-btn').addEventListener('click', () => this._triggerListen());
   }
 
   _setState(state) {
@@ -142,7 +215,6 @@ class JenniferApp {
     div.className = `message ${role}`;
     div.textContent = text;
     el.appendChild(div);
-    // Scroll the container (the element with overflow:auto), not the inner div
     container.scrollTop = container.scrollHeight;
   }
 
@@ -170,12 +242,15 @@ class JenniferApp {
     }
 
     this._setupAudioContext();
-    this._startWakeWord();
     this._startWaveform();
+
+    // Init MicVAD (loads ~1.8MB ONNX model once)
+    await this._initVAD();
+
+    this._startWakeWord();
 
     document.getElementById('start-btn').style.display = 'none';
     document.getElementById('controls').classList.add('visible');
-
     this._setState('listening');
   }
 
@@ -184,14 +259,11 @@ class JenniferApp {
   _setupAudioContext() {
     this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const source = this.audioContext.createMediaStreamSource(this.stream);
-
     this.analyser = this.audioContext.createAnalyser();
-    this.analyser.fftSize = 2048;        // 1024 bins — more frequency resolution for VAD
+    this.analyser.fftSize = 2048;
     this.analyser.smoothingTimeConstant = 0.3;
     source.connect(this.analyser);
-
-    this.vad = new SpeechVAD(this.analyser, this.audioContext.sampleRate);
-    console.log(`[jennifer] AudioContext: ${this.audioContext.sampleRate}Hz, VAD speech bins: ${this.vad.lowBin}–${this.vad.highBin}`);
+    console.log(`[jennifer] AudioContext: ${this.audioContext.sampleRate}Hz`);
   }
 
   _startWaveform() {
@@ -202,22 +274,77 @@ class JenniferApp {
     const draw = () => {
       requestAnimationFrame(draw);
       this.analyser.getByteTimeDomainData(buf);
-
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.lineWidth = 2;
-      ctx.strokeStyle = this.isRecording
-        ? (this.hasSpeech ? '#52c47a' : '#e05252')  // green=speech detected, red=waiting
+      ctx.strokeStyle = this.isListeningForSpeech
+        ? (this.state === 'recording' ? '#52c47a' : '#e05252')
         : '#4f8ef7';
       ctx.beginPath();
-
       const step = canvas.width / buf.length;
       for (let i = 0; i < buf.length; i++) {
         const y = (buf[i] / 255) * canvas.height;
-        i === 0 ? ctx.moveTo(i * step, y) : ctx.lineTo(i * step, y);
+        i === 0 ? ctx.moveTo(0, y) : ctx.lineTo(i * step, y);
       }
       ctx.stroke();
     };
     draw();
+  }
+
+  // ─── Silero VAD ───────────────────────────────────────────────────────────
+  // Uses @ricky0123/vad-web ML model (ONNX, ~1.8MB).
+  // MicVAD.new() loads the model once; we call start()/pause() per utterance.
+
+  async _initVAD() {
+    if (!window.vad) {
+      console.warn('[jennifer] vad bundle not loaded — falling back to manual record button only');
+      this._addNote('⚠ VAD model unavailable — use Record button to speak');
+      return;
+    }
+
+    console.log('[jennifer] Initialising Silero VAD...');
+    try {
+      this.micVAD = await window.vad.MicVAD.new({
+        stream: this.stream,
+        // All VAD assets are served at /vad/ — bundle auto-resolves model + worklet from there
+        baseAssetPath: '/vad/',
+        // ~1.6s of silence before onSpeechEnd fires (17 frames × 96ms)
+        redemptionFrames: 17,
+        // Must detect at least 3 speech frames (~290ms) to count as speech
+        minSpeechFrames: 3,
+        positiveSpeechThreshold: 0.5,
+        negativeSpeechThreshold: 0.35,
+
+        onSpeechStart: () => {
+          if (!this.isListeningForSpeech) return;
+          console.log('[jennifer] VAD: speech start');
+          this._setState('recording');
+        },
+
+        onSpeechEnd: async (audio) => {
+          // audio is Float32Array @ 16kHz — encode to WAV and send
+          console.log(`[jennifer] VAD: speech end (${audio.length} samples, ${(audio.length / 16000).toFixed(1)}s)`);
+          this.isListeningForSpeech = false;
+          this.micVAD.pause();
+          this._setState('processing');
+
+          const wavBuffer = encodeWAV(audio);
+          const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+          console.log(`[jennifer] → Sending WAV: ${(blob.size / 1024).toFixed(1)}KB`);
+          await this._sendAudio(blob);
+        },
+
+        onVADMisfire: () => {
+          // Too short / too quiet — go back to listening
+          console.log('[jennifer] VAD: misfire (too short)');
+          this._setState('listening');
+          this._startWakeWord();
+        },
+      });
+      console.log('[jennifer] ✅ Silero VAD ready');
+    } catch (err) {
+      console.error('[jennifer] VAD init failed:', err.message);
+      this._addNote('⚠ VAD failed to load — use Record button');
+    }
   }
 
   // ─── Wake Word Detection ──────────────────────────────────────────────────
@@ -230,29 +357,30 @@ class JenniferApp {
       return;
     }
 
-    console.log('[jennifer] Wake word detection active (listening for "Jennifer")');
+    if (this.recognition) {
+      try { this.recognition.stop(); } catch {}
+    }
+
     this.recognition = new SR();
     this.recognition.continuous = true;
     this.recognition.interimResults = true;
     this.recognition.lang = 'en-US';
-    this.recognition.maxAlternatives = 1;
 
     this.recognition.onresult = event => {
-      if (this.isRecording || this.isSpeaking) return;
+      if (this.isListeningForSpeech || this.isSpeaking) return;
       const recent = Array.from(event.results)
         .slice(-4)
         .map(r => r[0].transcript.toLowerCase())
         .join(' ');
       if (recent.includes('jennifer')) {
-        console.log(`[jennifer] Wake word in: "${recent}"`);
+        console.log(`[jennifer] Wake word detected in: "${recent}"`);
         this._onWakeWord();
       }
     };
 
     this.recognition.onend = () => {
-      if (this.state === 'listening' && !this.isRecording) {
-        console.log('[jennifer] Speech recognition restarting...');
-        try { this.recognition.start(); } catch (e) {}
+      if (this.state === 'listening' && !this.isListeningForSpeech) {
+        try { this.recognition.start(); } catch {}
       }
     };
 
@@ -261,124 +389,87 @@ class JenniferApp {
       if (e.error === 'not-allowed') this._addNote('Speech recognition blocked by browser.');
     };
 
-    try { this.recognition.start(); } catch (e) {}
+    try { this.recognition.start(); } catch {}
+    console.log('[jennifer] Wake word detection active (listening for "Jennifer")');
   }
 
   _stopWakeWord() {
-    try { this.recognition?.stop(); } catch (e) {}
+    try { this.recognition?.stop(); } catch {}
   }
 
-  // ─── Recording ───────────────────────────────────────────────────────────
+  // ─── Activate listening ───────────────────────────────────────────────────
 
   _onWakeWord() {
-    if (this.isRecording || this.isSpeaking) return;
-    this._startRecording();
+    if (this.isListeningForSpeech || this.isSpeaking) return;
+    this._activateListen();
   }
 
-  _triggerRecord() {
-    if (this.isRecording || this.isSpeaking) return;
+  _triggerListen() {
+    if (this.isListeningForSpeech || this.isSpeaking) return;
     if (!this.stream) { this._start(); return; }
-    this._startRecording();
+    this._activateListen();
   }
 
-  _startRecording() {
-    this.isRecording = true;
-    this.hasSpeech = false;
-    this.silenceStart = null;
-    this.vad.reset();
-    this._setState('recording');
+  _activateListen() {
     this._stopWakeWord();
+    this.isListeningForSpeech = true;
+    this._setState('recording');
+    this._setStatus('Speak now…');
 
-    const mimeType = this._bestMime();
-    console.log(`[jennifer] Recording started (mimeType=${mimeType || 'default'}, VAD active)`);
-    const chunks = [];
-
-    this.recorder = new MediaRecorder(this.stream, mimeType ? { mimeType } : undefined);
-    this.recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-    this.recorder.onstop = () => {
-      const blob = new Blob(chunks, { type: this.recorder.mimeType || 'audio/webm' });
-      console.log(`[jennifer] Recording stopped: ${chunks.length} chunks, ${(blob.size / 1024).toFixed(1)}KB`);
-      if (this.hasSpeech) {
-        this._sendAudio(blob);
-      } else {
-        console.log('[jennifer] No speech detected — discarding and going back to listening');
-        this._setState('listening');
-        this._startWakeWord();
-      }
-    };
-
-    this.recorder.start(100);
-    this._runVAD();
-  }
-
-  _bestMime() {
-    const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
-    return candidates.find(t => MediaRecorder.isTypeSupported(t)) || '';
-  }
-
-  _runVAD() {
-    if (!this.isRecording) return;
-
-    const { isSpeech, energy, noiseFloor } = this.vad.measure();
-    const now = Date.now();
-
-    if (isSpeech) {
-      // Speech detected — reset silence timer
-      if (!this.hasSpeech) {
-        console.log(`[jennifer] Speech onset detected (energy=${energy.toFixed(1)}, floor=${noiseFloor.toFixed(1)})`);
-      }
-      this.hasSpeech = true;
-      this.silenceStart = null;
-      this._setStatus('Recording…');
-
-    } else if (this.hasSpeech) {
-      // Speech ended — count down to stop
-      if (!this.silenceStart) {
-        this.silenceStart = now;
-        console.log(`[jennifer] Speech offset — silence countdown started`);
-      }
-      const elapsed = now - this.silenceStart;
-      const remaining = Math.ceil((this.SILENCE_DURATION - elapsed) / 1000);
-      this._setStatus(remaining > 0 ? `Done? Sending in ${remaining}s…` : 'Sending…');
-
-      if (elapsed >= this.SILENCE_DURATION) {
-        this._stopRecording();
-        return;
-      }
-
+    if (this.micVAD) {
+      console.log('[jennifer] MicVAD starting');
+      this.micVAD.start();
+    } else if (this.analyser) {
+      // Silero unavailable (e.g. SES lockdown from browser extension) — use frequency-domain VAD
+      console.log('[jennifer] Using frequency-domain VAD fallback');
+      this.speechVAD = new SpeechVAD(this.analyser, this.stream, async (blob) => {
+        this.isListeningForSpeech = false;
+        this._setState('processing');
+        console.log(`[jennifer] SpeechVAD → ${(blob.size / 1024).toFixed(1)}KB`);
+        await this._sendAudio(blob);
+      });
+      this.speechVAD.start();
     } else {
-      // No speech yet — show pulsing prompt
-      this._setStatus('Speak now…');
+      // No audio context yet (shouldn't happen after _start()) — last resort
+      console.warn('[jennifer] No VAD available — recording for 8s max');
+      this._fallbackRecord();
     }
-
-    requestAnimationFrame(() => this._runVAD());
   }
 
-  _stopRecording() {
-    if (!this.isRecording) return;
-    this.isRecording = false;
-    this.recorder?.stop();
-    if (this.hasSpeech) this._setState('processing');
+  // ─── Fallback (no VAD): plain MediaRecorder with 8s max ──────────────────
+
+  _fallbackRecord() {
+    const mimeType = (() => {
+      const c = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+      return c.find(t => MediaRecorder.isTypeSupported(t)) || '';
+    })();
+
+    const chunks = [];
+    const recorder = new MediaRecorder(this.stream, mimeType ? { mimeType } : undefined);
+    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    recorder.onstop = async () => {
+      this.isListeningForSpeech = false;
+      const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+      this._setState('processing');
+      await this._sendAudio(blob);
+    };
+    recorder.start(100);
+    setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, 8000);
   }
 
   // ─── Audio send / receive ─────────────────────────────────────────────────
 
   async _sendAudio(blob) {
-    console.log(`[jennifer] → Sending audio to server (${(blob.size / 1024).toFixed(1)}KB)...`);
     const buffer = await blob.arrayBuffer();
-    const base64 = this._bufToB64(buffer);
-    console.log(`[jennifer] → Base64 encoded: ${(base64.length / 1024).toFixed(1)}KB`);
-    this._send({ type: 'audio', data: base64, mimeType: blob.type });
-  }
-
-  _bufToB64(buffer) {
     const bytes = new Uint8Array(buffer);
     let binary = '';
     const chunk = 8192;
     for (let i = 0; i < bytes.length; i += chunk) {
       binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
     }
-    return btoa(binary);
+    const base64 = btoa(binary);
+    console.log(`[jennifer] → Sending audio: ${(base64.length * 0.75 / 1024).toFixed(1)}KB (${blob.type})`);
+    this._send({ type: 'audio', data: base64, mimeType: blob.type });
   }
 
   async _playAudio(base64, mimeType) {
@@ -430,6 +521,7 @@ class JenniferApp {
 
       case 'error':
         this._addNote(`⚠ ${msg.message}`);
+        this.isListeningForSpeech = false;
         this._setState('listening');
         this._startWakeWord();
         break;

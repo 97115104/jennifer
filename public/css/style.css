@@ -40,6 +40,17 @@ header {
   gap: 16px;
 }
 
+.settings-link {
+  margin-left: auto;
+  color: var(--text-muted);
+  opacity: 0.6;
+  transition: opacity 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.settings-link:hover { opacity: 1; color: var(--accent); }
+
 .orb {
   width: 52px;
   height: 52px;

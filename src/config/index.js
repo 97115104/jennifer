@@ -19,6 +19,15 @@ const config = {
     pass: process.env.SMTP_PASS || '',
     from: process.env.SMTP_FROM || process.env.SMTP_USER || '',
   },
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID || '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+  },
+  github: {
+    clientId: process.env.GITHUB_CLIENT_ID || '',
+    clientSecret: process.env.GITHUB_CLIENT_SECRET || '',
+  },
+  sessionSecret: process.env.SESSION_SECRET || 'jennifer-session-secret',
   tmpDir: process.env.TMP_DIR || os.tmpdir(),
 };
 

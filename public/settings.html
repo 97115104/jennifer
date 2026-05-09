@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jennifer — Settings</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%234f8ef7'/><text y='67' x='50' text-anchor='middle' font-size='50' fill='white'>J</text></svg>">
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    body { align-items: flex-start; padding: 40px 20px; }
+    .container { max-width: 700px; }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .page-header a {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .page-header a:hover { color: var(--accent); }
+    .page-header h2 { font-size: 1.5rem; font-weight: 700; }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+    .tab-btn {
+      padding: 10px 20px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: color 0.15s, border-color 0.15s;
+      margin-bottom: -1px;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .section h3 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+
+    .form-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .form-row label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      min-width: 60px;
+    }
+    input[type="text"] {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text);
+      font-size: 0.875rem;
+      outline: none;
+      min-width: 180px;
+    }
+    input[type="text"]:focus { border-color: var(--accent); }
+
+    .connected-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(82,196,122,0.12);
+      border: 1px solid var(--success);
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--success);
+      margin-bottom: 14px;
+    }
+    .disconnected-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(107,119,148,0.12);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+
+    .voice-list { list-style: none; margin-top: 10px; }
+    .voice-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 8px;
+      background: var(--bg);
+    }
+    .voice-item .voice-name { flex: 1; font-size: 0.875rem; font-weight: 600; }
+    .voice-item .active-tag {
+      font-size: 0.75rem;
+      background: rgba(79,142,247,0.12);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      border-radius: 10px;
+      padding: 2px 8px;
+    }
+
+    /* Reading prompts */
+    #reading-prompts {
+      display: none;
+      margin-top: 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+    }
+    #reading-prompts h4 {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+    .prompt-line {
+      font-size: 1rem;
+      line-height: 1.8;
+      color: var(--text-muted);
+      transition: color 0.3s, font-weight 0.2s;
+      cursor: default;
+    }
+    .prompt-line.active-prompt {
+      color: var(--text);
+      font-weight: 600;
+      font-size: 1.05rem;
+    }
+
+    /* Info banners */
+    .info-banner {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      background: rgba(79,142,247,0.06);
+      border: 1px solid rgba(79,142,247,0.2);
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      line-height: 1.65;
+    }
+    .info-banner.warning {
+      background: rgba(255,180,0,0.07);
+      border-color: rgba(255,180,0,0.3);
+      color: #e8c84a;
+    }
+    .info-banner code {
+      background: rgba(255,255,255,0.1);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 0.85em;
+      color: inherit;
+    }
+
+    /* Config note (instructions) */
+    .config-note {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.7;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+    .config-note strong { color: var(--text); }
+    .config-note code {
+      background: rgba(255,255,255,0.07);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 0.85em;
+    }
+    .config-note ol { padding-left: 18px; margin: 8px 0; }
+    .config-note li { margin-bottom: 4px; }
+    .config-note a { color: var(--accent); }
+
+    .recording-indicator {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      color: var(--danger);
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .recording-indicator.visible { display: flex; }
+    .rec-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--danger);
+      animation: blink 0.6s step-end infinite;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 18px;
+      font-size: 0.875rem;
+      color: var(--text);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      transform: translateY(80px);
+      opacity: 0;
+      transition: transform 0.25s, opacity 0.25s;
+      z-index: 100;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.success { border-color: var(--success); }
+    .toast.error { border-color: var(--danger); }
+
+    .btn.danger {
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid var(--danger);
+    }
+    .btn.danger:hover { background: rgba(224,82,82,0.1); }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <div class="page-header">
+      <a href="/">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Back
+      </a>
+      <h2>Settings</h2>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="voice">Voice Cloning</button>
+      <button class="tab-btn" data-tab="google">Google</button>
+      <button class="tab-btn" data-tab="github">GitHub</button>
+    </div>
+
+    <!-- ─── Voice Cloning ──────────────────────────────────────────────────── -->
+    <div class="tab-panel active" id="tab-voice">
+
+      <div id="tts-status"></div>
+
+      <div class="section">
+        <h3>Record Voice Sample</h3>
+
+        <div class="form-row">
+          <label>Name</label>
+          <input type="text" id="voice-name" placeholder="e.g. steve" maxlength="40" />
+        </div>
+
+        <div class="form-row">
+          <button class="btn primary" id="record-start-btn">&#9679; Start Recording</button>
+          <button class="btn secondary" id="record-stop-btn" style="display:none">&#9632; Stop &amp; Save</button>
+          <div class="recording-indicator" id="rec-indicator">
+            <div class="rec-dot"></div>
+            <span id="rec-timer">0s</span>
+          </div>
+        </div>
+
+        <!-- Reading prompts shown during recording -->
+        <div id="reading-prompts">
+          <h4>Read these aloud at a natural pace — aim for 20–30 seconds total</h4>
+          <div id="prompt-lines"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Saved Voices</h3>
+        <ul class="voice-list" id="voice-list">
+          <li style="color:var(--text-muted);font-size:0.85rem">Loading...</li>
+        </ul>
+
+        <div class="config-note">
+          <strong>To hear your cloned voice:</strong>
+          <ol>
+            <li>Start the myvoice server: <code>cd ~/myvoice && python server.py</code></li>
+            <li>Set <code>TTS_PROVIDER=coqui</code> in your <code>.env</code> file</li>
+            <li>Restart Jennifer: stop and run <code>./scripts/deploy-locally.sh</code> again</li>
+          </ol>
+          Don't have myvoice? Clone it: <a href="https://github.com/97115104/myvoice" target="_blank">github.com/97115104/myvoice</a>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ─── Google Tab ────────────────────────────────────────────────────── -->
+    <div class="tab-panel" id="tab-google">
+
+      <div class="section">
+        <h3>Gmail</h3>
+        <div id="google-status"></div>
+        <div id="google-actions"></div>
+
+        <div class="config-note">
+          <strong>How to get your Google credentials:</strong>
+          <ol>
+            <li>Open <a href="https://console.cloud.google.com/projectcreate" target="_blank">Google Cloud Console</a> and create a new project (name it "Jennifer" or anything)</li>
+            <li>Go to <a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank">Gmail API</a> and click <strong>Enable</strong></li>
+            <li>Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Credentials</a> → <strong>Create Credentials</strong> → <strong>OAuth 2.0 Client ID</strong></li>
+            <li>If prompted, configure the OAuth consent screen first: External, add your email as a test user</li>
+            <li>Application type: <strong>Web application</strong></li>
+            <li>Under "Authorized redirect URIs" add: <code>http://localhost:3000/auth/google/callback</code></li>
+            <li>Click <strong>Create</strong> — copy the <strong>Client ID</strong> and <strong>Client secret</strong></li>
+            <li>Paste them into <code>.env</code> as <code>GOOGLE_CLIENT_ID=</code> and <code>GOOGLE_CLIENT_SECRET=</code>, then restart Jennifer</li>
+          </ol>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ─── GitHub Tab ────────────────────────────────────────────────────── -->
+    <div class="tab-panel" id="tab-github">
+
+      <div class="section">
+        <h3>GitHub</h3>
+        <div id="github-status"></div>
+        <div id="github-actions"></div>
+
+        <div class="config-note">
+          <strong>How to get your GitHub credentials:</strong>
+          <ol>
+            <li>Go to <a href="https://github.com/settings/applications/new" target="_blank">github.com/settings/applications/new</a></li>
+            <li>Application name: <strong>Jennifer</strong></li>
+            <li>Homepage URL: <code>http://localhost:3000</code></li>
+            <li>Authorization callback URL: <code>http://localhost:3000/auth/github/callback</code></li>
+            <li>Click <strong>Register application</strong></li>
+            <li>On the next page, copy the <strong>Client ID</strong></li>
+            <li>Click <strong>Generate a new client secret</strong> — copy it immediately (shown only once)</li>
+            <li>Paste into <code>.env</code> as <code>GITHUB_CLIENT_ID=</code> and <code>GITHUB_CLIENT_SECRET=</code>, then restart Jennifer</li>
+          </ol>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // Build reading prompt lines
+    const prompts = [
+      "Good morning! How can I help you today?",
+      "Let me look that up for you right away.",
+      "I found the information you were looking for.",
+      "The weather today looks sunny with a light breeze.",
+      "I'll send that email to your contact right now.",
+      "Your calendar shows a meeting scheduled for three o'clock.",
+      "Would you like me to set a reminder for tomorrow morning?",
+      "I can create that GitHub repository for you.",
+      "The quick brown fox jumps over the lazy dog.",
+      "She sells seashells by the seashore.",
+    ];
+    const container = document.getElementById('prompt-lines');
+    prompts.forEach(p => {
+      const el = document.createElement('p');
+      el.className = 'prompt-line';
+      el.textContent = p;
+      container.appendChild(el);
+    });
+  </script>
+  <script src="/js/settings.js"></script>
+</body>
+</html>

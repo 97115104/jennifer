@@ -13,10 +13,15 @@ const ShellTool = require('../tools/ShellTool');
 const EmailTool = require('../tools/EmailTool');
 const ReadFileTool = require('../tools/ReadFileTool');
 const WriteFileTool = require('../tools/WriteFileTool');
+const GithubTool = require('../tools/GithubTool');
 const Assistant = require('../core/Assistant');
+const Settings = require('../core/Settings');
 
 async function main() {
   console.log('\n🎙  Jennifer starting up...\n');
+
+  // Init settings singleton (loads data/settings.json)
+  Settings.getInstance();
 
   const stt = new WhisperProvider({ whisperModel: config.whisperModel });
 
@@ -45,6 +50,7 @@ async function main() {
   tools.register(ReadFileTool);
   tools.register(WriteFileTool);
   tools.register(EmailTool);
+  tools.register(GithubTool);
 
   const assistant = new Assistant({ sttProvider: stt, ttsProvider: tts, toolRegistry: tools });
   await assistant.initialize();
@@ -55,6 +61,7 @@ async function main() {
 
   server.listen(config.port, () => {
     console.log(`\n✅  Jennifer is running at http://localhost:${config.port}`);
+    console.log(`   Settings:  http://localhost:${config.port}/settings`);
     console.log('   Open the URL in Chrome and click Start\n');
   });
 }

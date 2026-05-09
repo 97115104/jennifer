@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const session = require('express-session');
 const cors = require('cors');
 const multer = require('multer');
 const axios = require('axios');
@@ -11,6 +12,9 @@ const WebSocket = require('ws');
 const { v4: uuidv4 } = require('uuid');
 const config = require('../config');
 
+const createAuthRouter = require('./routes/auth');
+const createSettingsRouter = require('./routes/settings');
+
 function createApp(assistant) {
   const app = express();
   const upload = multer({
@@ -20,7 +24,40 @@ function createApp(assistant) {
 
   app.use(cors());
   app.use(express.json());
+  app.use(session({
+    secret: config.sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false, maxAge: 15 * 60 * 1000 },
+  }));
+
+  // Serve Silero VAD web bundle + ONNX runtime files
+  const vadDist = path.join(__dirname, '../../node_modules/@ricky0123/vad-web/dist');
+  if (fs.existsSync(vadDist)) {
+    app.use('/vad', express.static(vadDist));
+    console.log('[app] Serving VAD bundle at /vad/');
+  } else {
+    console.warn('[app] @ricky0123/vad-web not found — run npm install');
+  }
+  // Also serve onnxruntime-web WASM files at /vad/ (needed by vad bundle)
+  const ortDist = path.join(__dirname, '../../node_modules/onnxruntime-web/dist');
+  if (fs.existsSync(ortDist)) {
+    app.use('/vad', express.static(ortDist));
+  }
+
+  // Static files
   app.use(express.static(path.join(__dirname, '../../public')));
+
+  // Auth OAuth routes
+  app.use('/auth', createAuthRouter(config));
+
+  // Settings API
+  app.use('/api/settings', createSettingsRouter());
+
+  // Settings page
+  app.get('/settings', (req, res) => {
+    res.sendFile(path.join(__dirname, '../../public/settings.html'));
+  });
 
   app.get('/api/health', (req, res) => {
     res.json({
@@ -30,7 +67,7 @@ function createApp(assistant) {
     });
   });
 
-  // Live 429 API connectivity check — hit this in the browser to verify key + connection
+  // Live 429 API connectivity check
   app.get('/api/test', async (req, res) => {
     console.log('[test] Testing 429 API connection...');
     const t0 = Date.now();
