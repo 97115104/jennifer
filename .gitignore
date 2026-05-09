@@ -7,7 +7,7 @@ dist/
 *.aiff
 *.pcm
 
-data/voices/
+# data/voices/
 data/settings.json
 tts/.venv/
 tts/server.log
