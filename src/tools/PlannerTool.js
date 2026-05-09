@@ -141,12 +141,15 @@ CUSTOM — use when no named program fits:
       githubUsername: githubSettings.username,
     });
 
+    const assistantName = settings.get('app')?.name || 'Jennifer';
+
     try {
       const result = await pipeline.run(
         {
           email,
           concept_hint: concept_hint || null,
-          _client,  // aiGenerate steps call ctx._client.generate()
+          assistantName,
+          _client,
         },
         { onStatus },
       );
@@ -180,12 +183,15 @@ CUSTOM — use when no named program fits:
       githubUsername: githubSettings.username,
     });
 
+    const assistantName = settings.get('app')?.name || 'Jennifer';
+
     try {
       const result = await pipeline.run(
         {
           repo,
           improvement_hint: improvement_hint || null,
           email: email || null,
+          assistantName,
           _client,
         },
         { onStatus },

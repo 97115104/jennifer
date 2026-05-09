@@ -103,7 +103,7 @@ Hard requirements:
 - Full-viewport creative layout — not a centered card on white
 - A clear hero that names the project and what it does
 - Genuine creative execution of the visual theme
-- Footer containing exactly: Made by Jennifer
+- Footer containing exactly: Made by ${ctx.assistantName || 'Jennifer'}
 - End with </html> as the last line
 
 Output ONLY the HTML. First character: <. Last character: >.
@@ -197,7 +197,7 @@ Output only the README content.`,
         body: [
           `Hey,`,
           ``,
-          `Jennifer just created "${ctx.concept.title}" for you.`,
+          `${ctx.assistantName || 'Jennifer'} just created "${ctx.concept.title}" for you.`,
           ``,
           `${ctx.concept.description}`,
           ``,
@@ -206,7 +206,7 @@ Output only the README content.`,
           ``,
           `The live site takes about a minute to build after the first push.`,
           ``,
-          `Made by Jennifer`,
+          `Made by ${ctx.assistantName || 'Jennifer'}`,
         ].join('\n'),
       }),
       outputKey: 'emailResult',

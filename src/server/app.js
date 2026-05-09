@@ -16,6 +16,7 @@ const Settings = require('../core/Settings');
 const createAuthRouter = require('./routes/auth');
 const createSettingsRouter = require('./routes/settings');
 const createMemoryRouter = require('./routes/memory');
+const createHistoryRouter = require('./routes/history');
 
 function createApp(assistant) {
   const app = express();
@@ -56,6 +57,7 @@ function createApp(assistant) {
   // Settings API
   app.use('/api/settings', createSettingsRouter());
   app.use('/api/memory', createMemoryRouter());
+  app.use('/api/history', createHistoryRouter());
 
   // Settings page
   app.get('/settings', (req, res) => {

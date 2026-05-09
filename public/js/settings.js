@@ -70,7 +70,9 @@ const assistantNameInput = document.getElementById('assistant-name');
 const saveAssistantNameBtn = document.getElementById('save-assistant-name-btn');
 
 function renderApp(app = {}) {
-  if (assistantNameInput) assistantNameInput.value = app.name || 'Jennifer';
+  const name = app.name || 'Jennifer';
+  if (assistantNameInput) assistantNameInput.value = name;
+  document.title = `${name} — Settings`;
 }
 
 saveAssistantNameBtn?.addEventListener('click', async () => {

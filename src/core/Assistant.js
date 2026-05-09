@@ -186,6 +186,8 @@ class Assistant extends EventEmitter {
   }
 
   resetConversation() {
+    const ConversationHistory = require('./ConversationHistory');
+    ConversationHistory.save(this.conversation.getMessages());
     this.conversation.reset(true);
     this.emit('status', { state: 'idle', message: 'Conversation reset' });
   }

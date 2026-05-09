@@ -226,8 +226,12 @@ class JenniferApp {
 
   _bindUI() {
     document.getElementById('start-btn').addEventListener('click', () => this._start());
-    document.getElementById('reset-btn').addEventListener('click', () => this._reset());
+    document.getElementById('reset-btn').addEventListener('click', () => this._newChat());
     document.getElementById('manual-btn').addEventListener('click', () => this._triggerListen());
+    document.getElementById('history-btn').addEventListener('click', () => this._openHistory());
+    document.getElementById('history-close-btn').addEventListener('click', () => this._closeHistory());
+    document.getElementById('history-overlay').addEventListener('click', () => this._closeHistory());
+    document.getElementById('history-back-btn').addEventListener('click', () => this._showHistoryList());
   }
 
   _setState(state) {
@@ -272,22 +276,42 @@ class JenniferApp {
     this.toolActivity = null;
   }
 
-  _toolLabel(name) {
+  _toolLabel(name, action) {
+    if (name === 'google') {
+      const googleLabels = {
+        send_email: 'Sending email',
+        create_event: 'Creating calendar event',
+        list_events: 'Reading calendar',
+        get_event: 'Reading calendar event',
+        update_event: 'Updating calendar event',
+        delete_event: 'Deleting calendar event',
+        create_doc: 'Creating Google Doc',
+        read_doc: 'Reading Google Doc',
+        update_doc: 'Updating Google Doc',
+        delete_doc: 'Deleting Google Doc',
+        create_sheet: 'Creating Google Sheet',
+        read_sheet: 'Reading Google Sheet',
+        update_sheet: 'Updating Google Sheet',
+        append_to_sheet: 'Updating Google Sheet',
+        clear_sheet: 'Clearing Google Sheet',
+        delete_sheet: 'Deleting Google Sheet',
+      };
+      return googleLabels[action] || 'Using Google';
+    }
     const labels = {
       fetch_url: 'Searching internet',
       execute_shell: 'Running shell command',
       read_file: 'Reading file',
       write_file: 'Writing file',
-      send_email: 'Sending email',
       github: 'Using GitHub',
     };
     return labels[name] || `Running ${name || 'tool'}`;
   }
 
-  _showToolCall(name) {
+  _showToolCall(name, action) {
     const container = document.getElementById('transcript-container');
     const el = document.getElementById('transcript');
-    const label = this._toolLabel(name);
+    const label = this._toolLabel(name, action);
 
     if (!this.toolActivity?.el) {
       const div = document.createElement('div');
@@ -718,7 +742,7 @@ class JenniferApp {
 
       case 'tool_call':
         // Don't show plan_and_execute as a generic tool call — plan_start handles that
-        if (msg.name !== 'plan_and_execute') this._showToolCall(msg.name);
+        if (msg.name !== 'plan_and_execute') this._showToolCall(msg.name, msg.args?.action);
         break;
 
       case 'plan_start':
@@ -776,14 +800,92 @@ class JenniferApp {
     }
   }
 
-  // ─── Reset ────────────────────────────────────────────────────────────────
+  // ─── New Chat / History ───────────────────────────────────────────────────
 
-  _reset() {
+  _newChat() {
     this._send({ type: 'reset' });
     document.getElementById('transcript').innerHTML = '';
     this._resetToolActivity();
     this._hideTTSProgress();
-    this._addNote('Conversation cleared');
+    this._addNote('New conversation started');
+  }
+
+  _openHistory() {
+    document.getElementById('history-overlay').classList.add('open');
+    document.getElementById('history-panel').classList.add('open');
+    this._showHistoryList();
+    this._loadHistory();
+  }
+
+  _closeHistory() {
+    document.getElementById('history-overlay').classList.remove('open');
+    document.getElementById('history-panel').classList.remove('open');
+  }
+
+  _showHistoryList() {
+    document.getElementById('history-list-view').classList.remove('hidden');
+    document.getElementById('history-detail-view').classList.add('hidden');
+  }
+
+  async _loadHistory() {
+    const listEl = document.getElementById('history-list');
+    const emptyEl = document.getElementById('history-empty');
+    listEl.innerHTML = '<p style="padding:20px;color:var(--text-muted);font-size:.85rem">Loading…</p>';
+
+    try {
+      const res = await fetch('/api/history');
+      const items = await res.json();
+
+      listEl.innerHTML = '';
+      if (!items.length) {
+        emptyEl.classList.remove('hidden');
+        return;
+      }
+      emptyEl.classList.add('hidden');
+
+      items.forEach(item => {
+        const el = document.createElement('div');
+        el.className = 'history-item';
+        const date = new Date(item.startTime);
+        const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+        const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+        el.innerHTML = `
+          <div class="history-item-date">${dateStr} · ${timeStr}</div>
+          <div class="history-item-preview">${this._escHtml(item.preview || 'No content')}</div>
+          <div class="history-item-meta">${item.messageCount} message${item.messageCount !== 1 ? 's' : ''}</div>`;
+        el.addEventListener('click', () => this._showConversation(item.id));
+        listEl.appendChild(el);
+      });
+    } catch (err) {
+      listEl.innerHTML = `<p style="padding:20px;color:var(--danger);font-size:.85rem">Failed to load history: ${err.message}</p>`;
+    }
+  }
+
+  async _showConversation(id) {
+    document.getElementById('history-list-view').classList.add('hidden');
+    const detailView = document.getElementById('history-detail-view');
+    const messagesEl = document.getElementById('history-detail-messages');
+    detailView.classList.remove('hidden');
+    messagesEl.innerHTML = '<p style="color:var(--text-muted);font-size:.85rem">Loading…</p>';
+
+    try {
+      const res = await fetch(`/api/history/${id}`);
+      const entry = await res.json();
+      messagesEl.innerHTML = '';
+      (entry.messages || []).forEach(msg => {
+        const el = document.createElement('div');
+        el.className = `history-msg ${msg.role}`;
+        if (msg.role === 'assistant') el.setAttribute('data-name', this.assistantName);
+        el.textContent = msg.content;
+        messagesEl.appendChild(el);
+      });
+    } catch (err) {
+      messagesEl.innerHTML = `<p style="color:var(--danger);font-size:.85rem">Failed to load conversation: ${err.message}</p>`;
+    }
+  }
+
+  _escHtml(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 }
 
