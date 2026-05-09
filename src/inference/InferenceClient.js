@@ -21,7 +21,6 @@ class InferenceClient {
       const body = {
         model: this.model,
         messages: history,
-        web_search: true,
         temperature: 0.7,
         max_tokens: 2048,
       };

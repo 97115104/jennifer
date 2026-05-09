@@ -84,7 +84,7 @@ const WebFetchTool = {
       if (contentType.includes('text/html') || String(raw).trimStart().startsWith('<')) {
         const text = htmlToText(String(raw));
         console.log(`[fetch_url] Extracted ${text.length} chars of text`);
-        return text.length > 6000 ? text.slice(0, 6000) + '\n\n[content truncated]' : text;
+        return text.length > 10000 ? text.slice(0, 10000) + '\n\n[content truncated]' : text;
       }
 
       // Plain text / XML / other
