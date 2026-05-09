@@ -2,6 +2,7 @@
 
 const nodemailer = require('nodemailer');
 const config = require('../config');
+const MemoryStore = require('../core/MemoryStore');
 
 function getSettings() {
   try { return require('../core/Settings').getInstance(); } catch { return null; }
@@ -77,6 +78,13 @@ const EmailTool = {
   },
 
   async execute({ to, subject, body }) {
+    if (to && !to.includes('@')) {
+      const [match] = MemoryStore.lookup(to, 'email', 1);
+      if (!match) return `No saved email found for "${to}". Add it in /memory first.`;
+      console.log(`[email] Resolved "${to}" to saved contact "${match.key}"`);
+      to = match.value;
+    }
+
     const settings = getSettings();
     const google = settings?.get('google');
 

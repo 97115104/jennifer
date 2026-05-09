@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jennifer — Memory</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%234f8ef7'/><text y='67' x='50' text-anchor='middle' font-size='50' fill='white'>J</text></svg>">
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    body { align-items: flex-start; padding: 40px 20px; }
+    .container { max-width: 760px; }
+    .page-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .page-header a {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .page-header a:hover { color: var(--accent); }
+    .page-header h2 { font-size: 1.5rem; font-weight: 700; }
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .section h3 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 10px;
+      align-items: center;
+    }
+    label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    input, select, textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text);
+      font: inherit;
+      font-size: 0.875rem;
+      outline: none;
+    }
+    textarea { min-height: 74px; resize: vertical; }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    .form-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+    .memory-list { list-style: none; display: grid; gap: 10px; }
+    .memory-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+    }
+    .memory-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 5px;
+      font-weight: 700;
+    }
+    .memory-type {
+      color: var(--accent);
+      border: 1px solid rgba(79,142,247,0.35);
+      background: rgba(79,142,247,0.08);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .memory-value {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      word-break: break-word;
+      margin-bottom: 4px;
+    }
+    .memory-meta {
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      line-height: 1.45;
+    }
+    .memory-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .btn.danger {
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid var(--danger);
+    }
+    .btn.danger:hover { background: rgba(224,82,82,0.1); }
+    .empty {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+      padding: 8px 0;
+    }
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 18px;
+      font-size: 0.875rem;
+      color: var(--text);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      transform: translateY(80px);
+      opacity: 0;
+      transition: transform 0.25s, opacity 0.25s;
+      z-index: 100;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.success { border-color: var(--success); }
+    .toast.error { border-color: var(--danger); }
+    @media (max-width: 640px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .memory-item { grid-template-columns: 1fr; }
+      .memory-actions { justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="page-header">
+      <a href="/">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Back
+      </a>
+      <h2>Memory Variables</h2>
+    </div>
+
+    <div class="section">
+      <h3 id="form-title">Add Variable</h3>
+      <form id="memory-form">
+        <input type="hidden" id="entry-id" />
+        <div class="form-grid">
+          <label for="entry-type">Type</label>
+          <select id="entry-type">
+            <option value="email">Email</option>
+            <option value="url">Website / URL</option>
+            <option value="text">Text</option>
+          </select>
+
+          <label for="entry-key">Name</label>
+          <input id="entry-key" type="text" maxlength="80" placeholder="dakota, my blog, portfolio" required />
+
+          <label for="entry-value">Value</label>
+          <input id="entry-value" type="text" placeholder="dakota@example.com or blog.example.com" required />
+
+          <label for="entry-aliases">Aliases</label>
+          <input id="entry-aliases" type="text" placeholder="comma separated: blog, website, dakota rochelle" />
+
+          <label for="entry-note">Note</label>
+          <textarea id="entry-note" maxlength="240" placeholder="Optional context for Jennifer"></textarea>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn primary" id="save-btn">Save Variable</button>
+          <button type="button" class="btn ghost" id="cancel-btn" style="display:none">Cancel Edit</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="section">
+      <h3>Saved Variables</h3>
+      <ul class="memory-list" id="memory-list"></ul>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="/js/memory.js"></script>
+</body>
+</html>

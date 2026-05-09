@@ -55,6 +55,7 @@ Browser (Chrome)
 - **Local STT** — Whisper via `@xenova/transformers` (~150MB, no API cost)
 - **Reasoning model** — 429inference.com `gpt-oss` with chain-of-thought
 - **Tool system** — extensible plugin registry; model picks the right tool
+- **Memory variables** — save contacts, URLs, blogs, and reusable values at `/memory`
 - **System TTS** — macOS `say` / Linux `espeak` / Windows SAPI out of the box
 - **Voice cloning** — embedded Coqui XTTS v2 service (no ElevenLabs)
 - **REST + WebSocket API** — connect any device (Raspberry Pi, mobile, etc.)
@@ -154,6 +155,12 @@ COQUI_SPEAKER_WAV=/path/to/voice_sample.wav
 Run `./scripts/install.sh` and opt into voice cloning to create `tts/.venv`. After that, `./scripts/deploy-locally.sh` starts the XTTS service automatically before Jennifer.
 
 See [Voice Cloning docs](https://97115104.github.io/jennifer/voice-cloning) for full setup.
+
+---
+
+## Memory Variables
+
+Open `http://localhost:3000/memory` to save named emails, URLs, blogs, and reusable text values. Jennifer can use those names with tools, such as "send email to Dakota" or "read the latest from my blog."
 
 ---
 

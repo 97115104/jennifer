@@ -40,8 +40,15 @@ header {
   gap: 16px;
 }
 
-.settings-link {
+.header-actions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-link,
+.memory-link {
   color: var(--text-muted);
   opacity: 0.6;
   transition: opacity 0.2s, color 0.2s;
@@ -49,7 +56,8 @@ header {
   align-items: center;
 }
 
-.settings-link:hover { opacity: 1; color: var(--accent); }
+.settings-link:hover,
+.memory-link:hover { opacity: 1; color: var(--accent); }
 
 .orb {
   width: 52px;

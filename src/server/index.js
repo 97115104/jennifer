@@ -11,6 +11,7 @@ const ToolRegistry = require('../tools/ToolRegistry');
 const WebFetchTool = require('../tools/WebFetchTool');
 const ShellTool = require('../tools/ShellTool');
 const EmailTool = require('../tools/EmailTool');
+const MemoryTool = require('../tools/MemoryTool');
 const ReadFileTool = require('../tools/ReadFileTool');
 const WriteFileTool = require('../tools/WriteFileTool');
 const GithubTool = require('../tools/GithubTool');
@@ -50,6 +51,7 @@ async function main() {
 
   const tools = new ToolRegistry();
   tools.register(WebFetchTool);
+  tools.register(MemoryTool);
   tools.register(ShellTool);
   tools.register(ReadFileTool);
   tools.register(WriteFileTool);

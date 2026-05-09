@@ -3,6 +3,7 @@
 const axios = require('axios');
 const https = require('https');
 const config = require('../config');
+const MemoryStore = require('../core/MemoryStore');
 
 function htmlToText(html) {
   return html
@@ -51,6 +52,16 @@ const WebFetchTool = {
   },
 
   async execute({ url }) {
+    if (!/^https?:\/\//i.test(String(url || ''))) {
+      const [match] = MemoryStore.lookup(url, 'url', 1);
+      if (match) {
+        console.log(`[fetch_url] Resolved "${url}" to saved URL "${match.key}"`);
+        url = match.value;
+      } else if (/^[a-z0-9.-]+\.[a-z]{2,}/i.test(String(url || '').trim())) {
+        url = MemoryStore.normalizeUrl(url);
+      }
+    }
+
     console.log(`[fetch_url] GET ${url}`);
     const t0 = Date.now();
 

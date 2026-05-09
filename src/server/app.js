@@ -14,6 +14,7 @@ const config = require('../config');
 
 const createAuthRouter = require('./routes/auth');
 const createSettingsRouter = require('./routes/settings');
+const createMemoryRouter = require('./routes/memory');
 
 function createApp(assistant) {
   const app = express();
@@ -53,10 +54,15 @@ function createApp(assistant) {
 
   // Settings API
   app.use('/api/settings', createSettingsRouter());
+  app.use('/api/memory', createMemoryRouter());
 
   // Settings page
   app.get('/settings', (req, res) => {
     res.sendFile(path.join(__dirname, '../../public/settings.html'));
+  });
+
+  app.get('/memory', (req, res) => {
+    res.sendFile(path.join(__dirname, '../../public/memory.html'));
   });
 
   app.get('/api/health', (req, res) => {

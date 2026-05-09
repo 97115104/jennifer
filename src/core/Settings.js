@@ -10,6 +10,7 @@ const DEFAULTS = {
   tts: { provider: 'system', activeVoice: null },
   google: { connected: false, tokens: null, email: null, name: null },
   github: { connected: false, accessToken: null, username: null, name: null },
+  memory: { entries: [] },
 };
 
 class Settings {
@@ -26,6 +27,7 @@ class Settings {
         tts: { ...DEFAULTS.tts, ...raw.tts },
         google: { ...DEFAULTS.google, ...raw.google },
         github: { ...DEFAULTS.github, ...raw.github },
+        memory: { ...DEFAULTS.memory, ...raw.memory },
       };
     } catch {
       return JSON.parse(JSON.stringify(DEFAULTS));
