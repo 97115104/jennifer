@@ -325,14 +325,17 @@ async function sheetsAction(client, params) {
 const GoogleTool = {
   name: 'google',
   description: `Unified Google services adapter. All Google operations go through this one tool.
+Uses the connected Google account automatically — no user email, calendar ID, or auth is needed.
 
 SERVICES AND ACTIONS:
   Email    — send_email(to, subject, body)
-  Calendar — create_event, list_events, get_event, update_event(event_id, ...), delete_event(event_id)
+  Calendar — list_events() [NO params needed], create_event(title, start, end?), get_event(event_id),
+             update_event(event_id, ...), delete_event(event_id)
   Docs     — create_doc(title, content?), read_doc(doc_id), update_doc(doc_id, content, mode), delete_doc(doc_id)
   Sheets   — create_sheet(title, rows?), read_sheet(spreadsheet_id), update_sheet(spreadsheet_id, rows),
              append_to_sheet(spreadsheet_id, rows), clear_sheet(spreadsheet_id), delete_sheet(spreadsheet_id)
 
+IMPORTANT: For list_events call with ONLY action:"list_events" — no other parameters. Uses primary calendar automatically.
 update_doc mode: "append" (add to end) or "replace" (overwrite all content)
 Dates use ISO 8601: "2026-05-10T14:00:00". IDs are returned by create actions.`,
 

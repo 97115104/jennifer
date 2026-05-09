@@ -37,11 +37,11 @@ STEP 2 — ROUTE:
 
 TOOL ROUTING:
   github  → ALL GitHub ops: create_repo, push_file, get_file, list_repos, get_user, enable_pages
-  google  → ALL Google ops (single tool, use action= parameter):
-              email    → action: send_email
-              calendar → action: create_event, list_events, get_event, update_event, delete_event
-              docs     → action: create_doc, read_doc, update_doc, delete_doc
-              sheets   → action: create_sheet, read_sheet, update_sheet, append_to_sheet, clear_sheet
+  google  → ALL Google ops — uses the connected Google account automatically, no email/ID needed:
+              email    → action: send_email (to, subject, body)
+              calendar → action: list_events [NO other params needed] | create_event | get_event | update_event | delete_event
+              docs     → action: create_doc | read_doc | update_doc | delete_doc
+              sheets   → action: create_sheet | read_sheet | update_sheet | append_to_sheet | clear_sheet
   fetch_url        → fetch web pages
   execute_shell    → run shell commands
   write_file       → save local files
@@ -60,6 +60,9 @@ NAMED PROGRAMS (use these when the request matches — they run deterministicall
            params: { repo: "repo-name", improvement_hint: "what to improve", email: "optional" } })
 
 CONCRETE EXAMPLES:
+  User: "do I have anything on my calendar?" or "any upcoming events?"
+  → google({ action: "list_events" }) — call immediately, no other params needed
+
   User: "create a creative GitHub project and email me at X"
   → program="create_github_project", params.email="X"
 

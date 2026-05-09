@@ -239,7 +239,7 @@ h1 {
 }
 
 .message.assistant::before {
-  content: 'Jennifer  ';
+  content: var(--assistant-name-label, 'JENNIFER');
   font-size: 0.7rem;
   font-weight: 600;
   color: var(--accent2);

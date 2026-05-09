@@ -8,7 +8,7 @@ class GeminiAdapter {
   constructor({ apiKey, model, maxTokens = 8192 }) {
     const { GoogleGenerativeAI } = require('@google/generative-ai');
     this.genAI = new GoogleGenerativeAI(apiKey);
-    this.modelId = model || 'gemini-1.5-flash';
+    this.modelId = model || 'gemini-2.5-flash';
     this.maxTokens = maxTokens;
   }
 
@@ -37,7 +37,10 @@ class GeminiAdapter {
 
       } else if (msg.role === 'assistant') {
         flushFn();
-        if (msg.tool_calls?.length) {
+        if (msg._geminiParts) {
+          // Use raw Gemini parts verbatim — they contain id/thoughtSignature required for round 2
+          contents.push({ role: 'model', parts: msg._geminiParts });
+        } else if (msg.tool_calls?.length) {
           const parts = [];
           if (msg.content) parts.push({ text: msg.content });
           for (const tc of msg.tool_calls) {
@@ -131,6 +134,7 @@ class GeminiAdapter {
         history.push({
           role: 'assistant',
           content: parts.find(p => p.text)?.text || null,
+          _geminiParts: parts,  // preserve id/thoughtSignature for round 2
           tool_calls: fnCalls.map((p, i) => ({
             id: `gc-${round}-${i}`,
             type: 'function',

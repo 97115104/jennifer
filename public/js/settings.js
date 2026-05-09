@@ -100,7 +100,13 @@ saveAssistantNameBtn?.addEventListener('click', async () => {
 const MODEL_HINTS = {
   'openai-compatible': 'e.g. gpt-oss · gpt-4o · llama-3.3-70b',
   'anthropic':         'e.g. claude-opus-4-7 · claude-sonnet-4-6 · claude-haiku-4-5-20251001',
-  'gemini':            'e.g. gemini-1.5-flash · gemini-1.5-pro · gemini-2.0-flash-exp',
+  'gemini':            'e.g. gemini-2.5-flash · gemini-2.5-pro · gemini-2.0-flash',
+};
+
+const MODEL_DEFAULTS = {
+  'openai-compatible': 'gpt-oss',
+  'anthropic':         'claude-sonnet-4-6',
+  'gemini':            'gemini-2.5-flash',
 };
 
 function renderInference(inf = {}) {
@@ -133,7 +139,14 @@ function _showInfFields(provider) {
   if (hintEl) hintEl.textContent = MODEL_HINTS[provider] || '';
 }
 
-document.getElementById('inf-provider')?.addEventListener('change', e => _showInfFields(e.target.value));
+document.getElementById('inf-provider')?.addEventListener('change', e => {
+  const provider = e.target.value;
+  _showInfFields(provider);
+  const modEl = document.getElementById('inf-model');
+  if (modEl && !modEl.value.trim()) {
+    modEl.value = MODEL_DEFAULTS[provider] || '';
+  }
+});
 
 document.getElementById('save-inference-btn')?.addEventListener('click', async () => {
   const provider = document.getElementById('inf-provider')?.value || 'openai-compatible';

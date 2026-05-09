@@ -185,6 +185,8 @@ class JenniferApp {
     const orbLetter = document.getElementById('orb-letter');
     if (orbLetter) orbLetter.textContent = cleaned.slice(0, 1).toUpperCase();
 
+    document.documentElement.style.setProperty('--assistant-name-label', `"${cleaned}  "`);
+
     const wakePhrase = document.getElementById('wake-phrase');
     if (wakePhrase) wakePhrase.textContent = `"Ok ${cleaned}"`;
   }
