@@ -179,6 +179,17 @@ if ! command -v ffmpeg &>/dev/null; then
 fi
 ok "ffmpeg $(ffmpeg -version 2>&1 | head -1 | awk '{print $3}')"
 
+# ─── espeak-ng (Linux system TTS) ────────────────────────────────────────────
+if [[ "$OS" == "linux" ]]; then
+  if ! command -v espeak-ng &>/dev/null && ! command -v espeak &>/dev/null; then
+    info "Installing espeak-ng (system TTS for Linux)..."
+    pkg_install espeak-ng
+    ok "espeak-ng $(espeak-ng --version 2>&1 | head -1)"
+  else
+    ok "System TTS: $(command -v espeak-ng 2>/dev/null || command -v espeak)"
+  fi
+fi
+
 # ─── npm install ─────────────────────────────────────────────────────────────
 echo ""
 info "Installing Node.js packages..."
@@ -190,7 +201,7 @@ ok "Node.js packages installed"
 if [ ! -f "$JENNIFER_ROOT/.env" ]; then
   info "Creating .env from template..."
   cat > "$JENNIFER_ROOT/.env" <<'ENVEOF'
-# TTS provider: system (macOS say) | coqui (voice cloning — run install.sh first)
+# TTS provider: system (macOS say / Linux espeak-ng) | coqui (voice cloning — run install.sh first)
 TTS_PROVIDER=system
 
 # OAuth credentials (configure in /settings after starting)
@@ -262,10 +273,22 @@ if [ -z "$PYTHON_CMD" ]; then
       warn "Skipping voice cloning setup."
     fi
   elif [[ "$DISTRO" == "debian" ]]; then
-    warn "Install via deadsnakes PPA:"
-    warn "  sudo add-apt-repository ppa:deadsnakes/ppa && sudo apt-get update"
-    warn "  sudo apt-get install python3.11 python3.11-venv python3.11-dev"
-    warn "Skipping voice cloning setup."
+    prompt_reply "Install Python 3.11 via deadsnakes PPA? (Ubuntu/Mint/Pop) [y/N] " INSTALL_PY311_DEB
+    if no_reply "$INSTALL_PY311_DEB"; then
+      info "Installing Python 3.11 via deadsnakes PPA..."
+      sudo apt-get install -y software-properties-common
+      sudo add-apt-repository -y ppa:deadsnakes/ppa
+      sudo apt-get update -q
+      sudo apt-get install -y python3.11 python3.11-venv python3.11-dev
+      if command -v python3.11 &>/dev/null; then
+        PYTHON_CMD="python3.11"
+        ok "Python 3.11 installed: $(python3.11 --version)"
+      else
+        warn "python3.11 not found after install — skipping voice cloning."
+      fi
+    else
+      warn "Skipping voice cloning setup."
+    fi
   else
     warn "Skipping voice cloning setup."
   fi

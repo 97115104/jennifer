@@ -47,7 +47,7 @@ class SystemTTSProvider extends TTSProvider {
       const args = ['-w', wavPath, text];
       if (this.voice) args.push('-v', this.voice);
 
-      const espeak = spawn('espeak', args);
+      const espeak = spawn('espeak-ng', args);
       espeak.on('close', code => {
         if (code !== 0) return reject(new Error(`espeak failed (exit ${code})`));
         if (!outputPath.endsWith('.mp3')) return resolve(wavPath);
