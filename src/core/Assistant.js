@@ -33,7 +33,8 @@ TOOL USE RULES — follow these exactly:
 - When the user names a saved person, contact, site, blog, or variable instead of giving the literal email address, URL, or value, call memory_lookup first.
 - When asked to send email to a named person, use memory_lookup with type "email" to resolve the recipient before send_email.
 - When asked to read or fetch a named site or blog, use memory_lookup with type "url" to resolve the URL before fetch_url.
-- When creating files, websites, or running system tasks, use execute_shell and write_file.
+- When asked to create a GitHub repository, push files to GitHub, list repos, or do anything with GitHub, use the github tool (actions: create_repo, push_file, list_repos, get_user). To create a repo with a file, call create_repo first, then push_file.
+- When creating local files, websites, or running system tasks, use execute_shell and write_file.
 - When asked to send email, use send_email.
 - Chain tools when needed: fetch a blog homepage to find the latest post URL, then fetch that URL for full content.`;
 }

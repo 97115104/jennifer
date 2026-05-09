@@ -49,7 +49,11 @@ const GithubTool = {
     required: ['action'],
   },
 
-  async execute({ action, name, description, private: isPrivate, repo, file_path, content, message }) {
+  async execute({ action, name, repo_name, description, private: isPrivate, repo, repository, file_path, path: filePath, content, message }) {
+    // Accept common model aliases so it resolves on the first try
+    name = name || repo_name;
+    repo = repo || repository || repo_name;
+    file_path = file_path || filePath;
     const settings = getSettings();
     const github = settings.get('github');
 
@@ -82,14 +86,23 @@ const GithubTool = {
 
       if (action === 'create_repo') {
         if (!name) return 'Repository name is required for create_repo action';
-        const r = await axios.post(`${api}/user/repos`, {
-          name,
-          description: description || '',
-          private: isPrivate || false,
-          auto_init: true,
-        }, { headers });
-        console.log(`[github] Created repo: ${r.data.full_name}`);
-        return `Repository created: ${r.data.html_url}`;
+        try {
+          const r = await axios.post(`${api}/user/repos`, {
+            name,
+            description: description || '',
+            private: isPrivate || false,
+            auto_init: true,
+          }, { headers });
+          console.log(`[github] Created repo: ${r.data.full_name}`);
+          return `Repository created: ${r.data.html_url}`;
+        } catch (createErr) {
+          // 422 = repo already exists — treat as success so push_file can proceed
+          if (createErr.response?.status === 422) {
+            console.log(`[github] Repo "${name}" already exists — continuing`);
+            return `Repository https://github.com/${username}/${name} already exists — ready to push files.`;
+          }
+          throw createErr;
+        }
       }
 
       if (action === 'push_file') {
