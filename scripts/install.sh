@@ -71,18 +71,61 @@ set_env_value() {
   fi
 }
 
+# Install one or more packages using the distro's package manager.
+# Usage: pkg_install <pkg> [<pkg> ...]
+pkg_install() {
+  case "$DISTRO" in
+    arch)    sudo pacman -S --noconfirm --needed "$@" ;;
+    debian)  sudo apt-get install -y "$@" ;;
+    *)       warn "Cannot auto-install packages on $DISTRO — install manually: $*" ;;
+  esac
+}
+
 echo ""
 echo "  ╔══════════════════════════════╗"
 echo "  ║   Jennifer — Installer       ║"
 echo "  ╚══════════════════════════════╝"
 echo ""
 
+# ─── OS / distro detection ───────────────────────────────────────────────────
 OS=""
-if [[ "$OSTYPE" == "darwin"* ]]; then OS="mac"
-elif [[ "$OSTYPE" == "linux-gnu"* ]]; then OS="linux"
-else warn "Unknown OS: $OSTYPE — proceeding anyway"; OS="unknown"; fi
+DISTRO=""
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  OS="mac"
+  DISTRO="mac"
+elif [[ "$OSTYPE" == "linux-gnu"* || "$OSTYPE" == "linux-musl"* ]]; then
+  OS="linux"
+  if [ -f /etc/os-release ]; then
+    # shellcheck source=/dev/null
+    . /etc/os-release
+    case "${ID:-}" in
+      arch|manjaro|endeavouros|garuda) DISTRO="arch" ;;
+      ubuntu|debian|linuxmint|pop|raspbian|kali) DISTRO="debian" ;;
+      *)
+        case "${ID_LIKE:-}" in
+          *arch*)            DISTRO="arch" ;;
+          *debian*|*ubuntu*) DISTRO="debian" ;;
+          *)                 DISTRO="unknown" ;;
+        esac
+        ;;
+    esac
+  else
+    DISTRO="unknown"
+  fi
+else
+  warn "Unknown OS: $OSTYPE — proceeding anyway"
+  OS="unknown"
+  DISTRO="unknown"
+fi
 
-info "Detected OS: $OS"
+DISTRO_LABEL="$DISTRO"
+[[ "$DISTRO" == "debian" && -f /etc/os-release ]] && {
+  # shellcheck source=/dev/null
+  . /etc/os-release 2>/dev/null || true
+  DISTRO_LABEL="${PRETTY_NAME:-debian}"
+}
+
+info "Detected OS: $OS  |  Distro: $DISTRO_LABEL"
 echo ""
 
 # ─── Homebrew (macOS only) ───────────────────────────────────────────────────
@@ -101,8 +144,11 @@ fi
 # ─── Node.js ─────────────────────────────────────────────────────────────────
 if ! command -v node &>/dev/null; then
   info "Installing Node.js..."
-  if [[ "$OS" == "mac" ]]; then brew install node
-  elif [[ "$OS" == "linux" ]]; then
+  if [[ "$OS" == "mac" ]]; then
+    brew install node
+  elif [[ "$DISTRO" == "arch" ]]; then
+    pkg_install nodejs npm
+  elif [[ "$DISTRO" == "debian" ]]; then
     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
     sudo apt-get install -y nodejs
   else
@@ -118,12 +164,17 @@ if ! command -v npm &>/dev/null; then
 fi
 ok "npm $(npm --version)"
 
-# ─── ffmpeg ───────────────────────────────────────────────────────────────────
+# ─── ffmpeg ──────────────────────────────────────────────────────────────────
 if ! command -v ffmpeg &>/dev/null; then
   info "Installing ffmpeg..."
-  if [[ "$OS" == "mac" ]]; then brew install ffmpeg
-  elif [[ "$OS" == "linux" ]]; then sudo apt-get update && sudo apt-get install -y ffmpeg
-  else err "Install ffmpeg from https://ffmpeg.org/download.html and re-run"
+  if [[ "$OS" == "mac" ]]; then
+    brew install ffmpeg
+  elif [[ "$DISTRO" == "arch" ]]; then
+    pkg_install ffmpeg
+  elif [[ "$DISTRO" == "debian" ]]; then
+    sudo apt-get update && sudo apt-get install -y ffmpeg
+  else
+    err "Install ffmpeg from https://ffmpeg.org/download.html and re-run"
   fi
 fi
 ok "ffmpeg $(ffmpeg -version 2>&1 | head -1 | awk '{print $3}')"
@@ -184,13 +235,33 @@ done
 
 if [ -z "$PYTHON_CMD" ]; then
   warn "Python 3.9–3.11 not found — voice cloning requires it"
-  warn "Install via homebrew: brew install python@3.11"
+  if [[ "$OS" == "mac" ]]; then
+    warn "Install via Homebrew:  brew install python@3.11"
+  elif [[ "$DISTRO" == "arch" ]]; then
+    warn "Arch ships Python 3.12+; install 3.11 via pyenv or the AUR package 'python311':"
+    warn "  pyenv install 3.11  OR  yay -S python311"
+  elif [[ "$DISTRO" == "debian" ]]; then
+    warn "Install via deadsnakes PPA:"
+    warn "  sudo add-apt-repository ppa:deadsnakes/ppa && sudo apt-get update"
+    warn "  sudo apt-get install python3.11 python3.11-venv python3.11-dev"
+  fi
   warn "Skipping voice cloning setup."
 else
   prompt_reply "Set up voice cloning (Coqui XTTS v2)? Requires ~4GB disk. [y/N] " SETUP_TTS
   if no_reply "$SETUP_TTS"; then
     [ -f "$TTS_DIR/requirements.txt" ] || err "Missing $TTS_DIR/requirements.txt"
     [ -f "$TTS_DIR/server.py" ] || err "Missing $TTS_DIR/server.py"
+
+    # Install system-level audio/speech deps needed by Coqui TTS
+    if [[ "$OS" == "linux" ]]; then
+      info "Installing system dependencies for Coqui TTS..."
+      if [[ "$DISTRO" == "arch" ]]; then
+        pkg_install espeak-ng libsndfile
+      elif [[ "$DISTRO" == "debian" ]]; then
+        sudo apt-get update
+        pkg_install espeak-ng libsndfile1 libsndfile1-dev python3-dev build-essential
+      fi
+    fi
 
     if [ ! -d "$VENV_DIR" ]; then
       info "Creating Python venv in tts/.venv..."
@@ -234,7 +305,7 @@ PYEOF
   fi
 fi
 
-# ─── Whisper model pre-download ───────────────────────────────────────────────
+# ─── Whisper model pre-download ──────────────────────────────────────────────
 echo ""
 prompt_reply "Pre-download Whisper STT model? (~150MB, speeds up first query) [y/N] " DL_WHISPER
 if no_reply "$DL_WHISPER"; then
