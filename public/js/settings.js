@@ -493,11 +493,6 @@ function renderTTS(tts = {}) {
   const sel = document.getElementById('tts-provider-select');
   if (sel) sel.value = provider;
 
-  const speedInput = document.getElementById('tts-speed');
-  const speedLabel = document.getElementById('tts-speed-label');
-  if (speedInput) { speedInput.value = tts.speed ?? 1.0; }
-  if (speedLabel) { speedLabel.textContent = `${(tts.speed ?? 1.0).toFixed(1)}×`; }
-
   const autoSpeakCb = document.getElementById('tts-autospeak');
   if (autoSpeakCb) { autoSpeakCb.checked = tts.autoSpeak !== false; }
 
@@ -512,18 +507,12 @@ document.getElementById('tts-provider-select')?.addEventListener('change', e => 
   renderVoices(settings.voices || [], settings.tts || {});
 });
 
-document.getElementById('tts-speed')?.addEventListener('input', e => {
-  const lbl = document.getElementById('tts-speed-label');
-  if (lbl) lbl.textContent = `${parseFloat(e.target.value).toFixed(1)}×`;
-});
-
 document.getElementById('save-tts-btn')?.addEventListener('click', async () => {
   const resultEl = document.getElementById('tts-save-result');
   const MASK = '***';
 
   const body = {
     provider:  document.getElementById('tts-provider-select')?.value,
-    speed:     parseFloat(document.getElementById('tts-speed')?.value || '1.0'),
     autoSpeak: document.getElementById('tts-autospeak')?.checked ?? true,
   };
 

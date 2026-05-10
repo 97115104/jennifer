@@ -217,7 +217,9 @@ class JenniferApp {
     const ttsLabel    = TTS_LABELS[ttsProvider] || ttsProvider;
     const voiceName   = ttsProvider === '429'
       ? (tts.voiceRef429Label ? tts.voiceRef429Label.replace('.wav', '') : null)
-      : (tts.activeVoice ? tts.activeVoice.split('/').pop().replace('.wav', '') : null);
+      : ttsProvider === 'local'
+        ? (tts.activeVoice ? tts.activeVoice.split('/').pop().replace('.wav', '') : null)
+        : null;
     const ttsStr = voiceName ? `${ttsLabel} · ${voiceName}` : ttsLabel;
 
     const modelPart = provider && model ? `${label} · ${model}${costStr}` : (label || '');

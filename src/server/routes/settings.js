@@ -313,13 +313,12 @@ function createSettingsRouter(ttsProvider) {
   router.post('/tts', (req, res) => {
     const VALID_PROVIDERS = ['system', 'local', '429'];
     const MASK = '***';
-    const { provider, apiKey429, voiceRef429, speed, autoSpeak } = req.body || {};
+    const { provider, apiKey429, voiceRef429, autoSpeak } = req.body || {};
 
     const patch = {};
     if (provider !== undefined && VALID_PROVIDERS.includes(provider)) patch.provider = provider;
     if (apiKey429 !== undefined && apiKey429 !== MASK) patch.apiKey429 = String(apiKey429).trim();
     if (voiceRef429 !== undefined) patch.voiceRef429 = String(voiceRef429).trim();
-    if (speed !== undefined) patch.speed = Math.min(2.0, Math.max(0.5, parseFloat(speed) || 1.0));
     if (autoSpeak !== undefined) patch.autoSpeak = Boolean(autoSpeak);
 
     getSettings().set('tts', patch);

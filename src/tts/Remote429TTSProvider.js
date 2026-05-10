@@ -11,7 +11,7 @@ const TTS_ENDPOINT = 'https://api.429inference.com/v1/tts/synthesize';
 class Remote429TTSProvider extends TTSProvider {
   async synthesize(text, outputPath) {
     const tts = getSettings().get('tts');
-    const { apiKey429, voiceRef429, speed = 1.0 } = tts || {};
+    const { apiKey429, voiceRef429 } = tts || {};
 
     if (!apiKey429) throw new Error('429 TTS: apiKey429 not configured');
     if (!voiceRef429) throw new Error('429 TTS: voiceRef429 not configured');
@@ -21,7 +21,6 @@ class Remote429TTSProvider extends TTSProvider {
       text,
       voice: voiceBase64,
       language: 'en',
-      speed,
       exaggeration: 0.5,
       format: 'mp3',
     });

@@ -320,10 +320,16 @@
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 6px;
-      padding: 8px 12px;
+      padding: 8px 28px 8px 12px;
       color: var(--text);
       font-size: 0.875rem;
       outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7794' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      cursor: pointer;
     }
     .inf-select:focus { border-color: var(--accent); }
 
@@ -524,12 +530,6 @@
             <option value="local">Local Clone (Coqui XTTS v2)</option>
             <option value="429">429 Inference (Chatterbox Turbo)</option>
           </select>
-        </div>
-
-        <div class="form-row">
-          <label>Speed</label>
-          <input type="range" id="tts-speed" min="0.5" max="2.0" step="0.1" value="1.0" style="flex:1;min-width:0" />
-          <span id="tts-speed-label" style="min-width:2.5rem;text-align:right">1.0×</span>
         </div>
 
         <div class="form-row">

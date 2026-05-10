@@ -8,7 +8,7 @@ const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 const DEFAULTS = {
   app:       { name: 'Jennifer' },
-  tts:       { provider: 'system', activeVoice: null, apiKey429: '', voiceRef429: '', speed: 1.0, autoSpeak: true },
+  tts:       { provider: 'system', activeVoice: null, apiKey429: '', voiceRef429: '', autoSpeak: true },
   google:    { connected: false, tokens: null, email: null, name: null },
   github:    { connected: false, accessToken: null, username: null, name: null },
   inference: {
