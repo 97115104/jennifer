@@ -6,14 +6,19 @@ const { getInstance: getSettings } = require('../core/Settings');
 // Reads tts.provider from Settings on every synthesize() call so provider
 // switches take effect immediately without a server restart.
 class DynamicTTSProvider extends TTSProvider {
-  constructor({ system, local, remote429 }) {
+  constructor({ system, remote429 }) {
     super();
-    this._providers = { system, local, '429': remote429 };
+    this._providers = { system, '429': remote429 };
+  }
+
+  getActiveProvider() {
+    const provider = getSettings().get('tts')?.provider || 'system';
+    return this._providers[provider] ? provider : 'system';
   }
 
   async synthesize(text, outputPath) {
-    const provider = getSettings().get('tts')?.provider || 'system';
-    const impl = this._providers[provider] || this._providers.system;
+    const provider = this.getActiveProvider();
+    const impl = this._providers[provider];
 
     try {
       return await impl.synthesize(text, outputPath);

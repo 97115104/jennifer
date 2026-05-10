@@ -9,6 +9,7 @@ const axios = require('axios');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const config = require('../../config');
+const { resolve429VoicePath } = require('../../tts/default429Voice');
 
 const execFileAsync = promisify(execFile);
 
@@ -36,6 +37,17 @@ function listVoices() {
   return fs.readdirSync(VOICES_DIR)
     .filter(f => f.endsWith('.wav'))
     .map(f => ({ name: f.replace('.wav', '') }));
+}
+
+function ensureDefault429VoiceSelected(settings) {
+  const tts = settings.get('tts') || {};
+  if (tts.provider !== '429') return tts.voiceRef429 || '';
+
+  const resolvedVoiceRef429 = resolve429VoicePath(tts.voiceRef429);
+  if (resolvedVoiceRef429 && resolvedVoiceRef429 !== tts.voiceRef429) {
+    settings.set('tts', { voiceRef429: resolvedVoiceRef429 });
+  }
+  return resolvedVoiceRef429 || '';
 }
 
 async function _fetchModelsForProvider(provider, inf) {
@@ -170,7 +182,9 @@ function createSettingsRouter(ttsProvider) {
 
   // GET /api/settings — current settings (secrets masked)
   router.get('/', (req, res) => {
-    const s = getSettings().getAll();
+    const settings = getSettings();
+    ensureDefault429VoiceSelected(settings);
+    const s = settings.getAll();
     const inf = s.inference || {};
     const raw = inf.provider || '429-inference';
     let provider = raw === 'openai-compatible' ? 'custom' : raw;
@@ -181,8 +195,7 @@ function createSettingsRouter(ttsProvider) {
     res.json({
       app:    s.app,
       tts: {
-        provider:      s.tts.provider,
-        activeVoice:   s.tts.activeVoice,
+        provider:      ['system', '429'].includes(s.tts.provider) ? s.tts.provider : 'system',
         speed:         s.tts.speed,
         autoSpeak:     s.tts.autoSpeak,
         hasApiKey429:  !!(s.tts.apiKey429),
@@ -234,12 +247,13 @@ function createSettingsRouter(ttsProvider) {
 
   // GET /api/settings/voices — list voice samples
   router.get('/voices', (req, res) => {
-    const activeVoice = getSettings().get('tts').activeVoice;
+    const settings = getSettings();
+    const selectedVoice = ensureDefault429VoiceSelected(settings);
     const voices = listVoices().map(v => ({
       ...v,
-      active: activeVoice === path.join(VOICES_DIR, `${v.name}.wav`),
+      active: selectedVoice === path.join(VOICES_DIR, `${v.name}.wav`),
     }));
-    res.json({ voices, activeVoice });
+    res.json({ voices, selectedVoice });
   });
 
   // POST /api/settings/voices/upload — upload + convert voice sample
@@ -276,7 +290,10 @@ function createSettingsRouter(ttsProvider) {
   router.post('/voices/ref429', (req, res) => {
     const name = sanitizeVoiceName(req.body.name);
     if (!name) {
-      getSettings().set('tts', { voiceRef429: '' });
+      const settings = getSettings();
+      const fallbackVoiceRef429 = ensureDefault429VoiceSelected(settings);
+      if (fallbackVoiceRef429) return res.json({ ok: true, voiceRef429: fallbackVoiceRef429 });
+      settings.set('tts', { voiceRef429: '' });
       return res.json({ ok: true, voiceRef429: null });
     }
     const voicePath = path.join(VOICES_DIR, `${name}.wav`);
@@ -284,20 +301,6 @@ function createSettingsRouter(ttsProvider) {
     getSettings().set('tts', { voiceRef429: voicePath });
     console.log(`[settings/voices] ref429 set to: ${voicePath}`);
     res.json({ ok: true, voiceRef429: voicePath });
-  });
-
-  // POST /api/settings/voices/active — set active voice
-  router.post('/voices/active', (req, res) => {
-    const name = sanitizeVoiceName(req.body.name);
-    if (!name) {
-      getSettings().set('tts', { activeVoice: null });
-      return res.json({ ok: true, activeVoice: null });
-    }
-    const voicePath = path.join(VOICES_DIR, `${name}.wav`);
-    if (!fs.existsSync(voicePath)) return res.status(404).json({ error: 'Voice not found' });
-    getSettings().set('tts', { activeVoice: voicePath });
-    console.log(`[settings/voices] Active voice set to: ${voicePath}`);
-    res.json({ ok: true, activeVoice: voicePath });
   });
 
   // GET /api/settings/voices/:name/download — download the stored WAV source
@@ -311,7 +314,7 @@ function createSettingsRouter(ttsProvider) {
 
   // POST /api/settings/tts — save TTS settings
   router.post('/tts', (req, res) => {
-    const VALID_PROVIDERS = ['system', 'local', '429'];
+    const VALID_PROVIDERS = ['system', '429'];
     const MASK = '***';
     const { provider, apiKey429, voiceRef429, autoSpeak } = req.body || {};
 
@@ -321,7 +324,16 @@ function createSettingsRouter(ttsProvider) {
     if (voiceRef429 !== undefined) patch.voiceRef429 = String(voiceRef429).trim();
     if (autoSpeak !== undefined) patch.autoSpeak = Boolean(autoSpeak);
 
-    getSettings().set('tts', patch);
+    const settings = getSettings();
+    const currentTts = settings.get('tts') || {};
+    const nextProvider = patch.provider || currentTts.provider || 'system';
+    const nextVoiceRef429 = patch.voiceRef429 !== undefined ? patch.voiceRef429 : currentTts.voiceRef429;
+    const resolvedVoiceRef429 = resolve429VoicePath(nextVoiceRef429);
+    if (nextProvider === '429' && resolvedVoiceRef429 && resolvedVoiceRef429 !== nextVoiceRef429) {
+      patch.voiceRef429 = resolvedVoiceRef429;
+    }
+
+    settings.set('tts', patch);
     res.json({ ok: true });
   });
 
@@ -336,16 +348,6 @@ function createSettingsRouter(ttsProvider) {
       execFile(bin, ['--version'], (err) => {
         res.json({ ok: !err, provider, detail: err ? `${bin} not found` : `${bin} available` });
       });
-      return;
-    }
-
-    if (provider === 'local') {
-      try {
-        const r = await axios.get('http://localhost:5123/api/health', { timeout: 4000 });
-        res.json({ ok: true, provider, detail: `XTTS ready, device: ${r.data.device || 'unknown'}` });
-      } catch (err) {
-        res.json({ ok: false, provider, detail: err.message });
-      }
       return;
     }
 
@@ -386,7 +388,8 @@ function createSettingsRouter(ttsProvider) {
       res.json({ ok: true, audio, mimeType: 'audio/mpeg' });
     } catch (err) {
       console.error('[settings/tts/test]', err.message);
-      res.status(500).json({ ok: false, error: err.message });
+      const isConfigError = /not configured|needs a saved voice source|missing/i.test(err.message);
+      res.status(isConfigError ? 400 : 500).json({ ok: false, error: err.message });
     } finally {
       fs.unlink(tmpPath, () => {});
     }
@@ -400,8 +403,10 @@ function createSettingsRouter(ttsProvider) {
 
     fs.unlinkSync(voicePath);
     const settings = getSettings();
-    if (settings.get('tts').activeVoice === voicePath) {
-      settings.set('tts', { activeVoice: null });
+    const tts = settings.get('tts');
+    if (tts.voiceRef429 === voicePath) {
+      const fallbackVoiceRef429 = tts.provider === '429' ? resolve429VoicePath('') : '';
+      settings.set('tts', { voiceRef429: fallbackVoiceRef429 });
     }
     console.log(`[settings/voices] Deleted: ${voicePath}`);
     res.json({ ok: true });

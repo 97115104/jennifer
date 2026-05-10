@@ -5,6 +5,7 @@ const http = require('http');
 const fs = require('fs');
 const TTSProvider = require('./TTSProvider');
 const { getInstance: getSettings } = require('../core/Settings');
+const { DEFAULT_429_VOICE_NAME, resolve429VoicePath } = require('./default429Voice');
 
 const TTS_ENDPOINT = 'https://api.429inference.com/v1/tts/synthesize';
 
@@ -12,11 +13,12 @@ class Remote429TTSProvider extends TTSProvider {
   async synthesize(text, outputPath) {
     const tts = getSettings().get('tts');
     const { apiKey429, voiceRef429 } = tts || {};
+    const voicePath = resolve429VoicePath(voiceRef429);
 
-    if (!apiKey429) throw new Error('429 TTS: apiKey429 not configured');
-    if (!voiceRef429) throw new Error('429 TTS: voiceRef429 not configured');
+    if (!apiKey429) throw new Error('429 TTS API key is not configured');
+    if (!voicePath) throw new Error(`429 TTS needs a saved voice source. Record or upload one in Settings, then click Use. The default "${DEFAULT_429_VOICE_NAME}" voice is missing.`);
 
-    const voiceBase64 = fs.readFileSync(voiceRef429).toString('base64');
+    const voiceBase64 = fs.readFileSync(voicePath).toString('base64');
     const body = JSON.stringify({
       text,
       voice: voiceBase64,

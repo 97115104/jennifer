@@ -4,7 +4,7 @@ require('dotenv').config();
 const os = require('os');
 
 const requestedTTSProvider = process.env.TTS_PROVIDER || 'system';
-const ttsProvider = ['system', 'coqui'].includes(requestedTTSProvider)
+const ttsProvider = ['system', '429'].includes(requestedTTSProvider)
   ? requestedTTSProvider
   : 'system';
 
@@ -15,7 +15,7 @@ function readIntEnv(name, fallback) {
 
 const config = {
   apiKey: process.env['429-API-KEY'],
-  apiVoiceKey429: process.env['429-API-VOICE-KEY'] || '',
+  apiVoiceKey429: process.env['429-VOICE-API-KEY'] || process.env['429-API-VOICE-KEY'] || process.env['429-API-KEY'] || '',
   apiBaseUrl: process.env.API_BASE_URL || 'https://api.429inference.com',
   apiModel: process.env.API_MODEL || 'gpt-oss',
   apiMaxTokens: readIntEnv('API_MAX_TOKENS', 8192),
@@ -23,8 +23,6 @@ const config = {
   port: parseInt(process.env.PORT || '3000', 10),
   whisperModel: process.env.WHISPER_MODEL || 'Xenova/whisper-base.en',
   ttsProvider,
-  coquiUrl: process.env.COQUI_URL || 'http://localhost:5123',
-  coquiSpeakerWav: process.env.COQUI_SPEAKER_WAV || null,
   ttsTimeoutMs: readIntEnv('TTS_TIMEOUT_MS', 0),
   fetchMaxChars: readIntEnv('FETCH_MAX_CHARS', 50000),
   fetchTimeoutMs: readIntEnv('FETCH_TIMEOUT_MS', 45000),

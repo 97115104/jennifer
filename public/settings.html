@@ -574,7 +574,6 @@
           <label>Provider</label>
           <select id="tts-provider-select">
             <option value="system">System (espeak-ng / say)</option>
-            <option value="local">Local Clone (Coqui XTTS v2)</option>
             <option value="429">429 Inference (Chatterbox Turbo)</option>
           </select>
         </div>
@@ -608,16 +607,7 @@
         </div>
       </div>
 
-      <!-- Local clone setup note (shown only when provider = local) -->
-      <div class="section" id="tts-local-section" style="display:none">
-        <div class="config-note">
-          <strong>Setup:</strong> Run <code>./scripts/install.sh</code> and opt into voice cloning,
-          then restart with <code>./scripts/deploy-locally.sh</code>.
-          Check <code>tts/server.log</code> if it falls back to system TTS.
-        </div>
-      </div>
-
-      <!-- Shared voice recording/upload/list (shown for local + 429) -->
+      <!-- Voice recording/upload/list (shown for 429 voice) -->
       <div class="section" id="tts-voice-section" style="display:none">
         <h3>Voice Source</h3>
 

@@ -212,14 +212,12 @@ class JenniferApp {
       const c = (500 * p.i + 200 * p.o) / 1_000_000;
       costStr = ` · ~$${c < 0.001 ? c.toFixed(4) : c.toFixed(3)}/req`;
     }
-    const TTS_LABELS = { system: 'System TTS', local: 'Local Clone', '429': '429 Voice' };
+    const TTS_LABELS = { system: 'System TTS', '429': '429 Voice' };
     const ttsProvider = tts.provider || 'system';
     const ttsLabel    = TTS_LABELS[ttsProvider] || ttsProvider;
     const voiceName   = ttsProvider === '429'
       ? (tts.voiceRef429Label ? tts.voiceRef429Label.replace('.wav', '') : null)
-      : ttsProvider === 'local'
-        ? (tts.activeVoice ? tts.activeVoice.split('/').pop().replace('.wav', '') : null)
-        : null;
+      : null;
     const ttsStr = voiceName ? `${ttsLabel} · ${voiceName}` : ttsLabel;
 
     const modelPart = provider && model ? `${label} · ${model}${costStr}` : (label || '');
@@ -864,7 +862,7 @@ class JenniferApp {
         break;
 
       case 'tts_progress':
-        if (msg.provider !== 'coqui') break;
+        if (msg.provider !== '429') break;
         if (msg.phase === 'start') {
           this.isSpeaking = true;
           this._stopWakeWord();
@@ -881,7 +879,7 @@ class JenniferApp {
           this._setState('speaking');
           this.isSpeaking = true;
           this._stopWakeWord();
-          this._completeTTSProgress('Playing cloned speech');
+          this._completeTTSProgress('Playing speech');
           this._playAudio(msg.data, msg.mimeType).then(() => {
             this._hideTTSProgress(400);
             this.isSpeaking = false;

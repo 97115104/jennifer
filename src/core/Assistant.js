@@ -156,13 +156,16 @@ class Assistant extends EventEmitter {
     this.conversation.addAssistant(responseText);
     this.emit('response', { text: responseText });
 
-    const ttsProvider = this.tts?.constructor?.name === 'CoquiTTSProvider' ? 'coqui' : 'system';
-    const ttsStartMessage = ttsProvider === 'coqui' ? 'Generating cloned speech...' : 'Preparing speech...';
+    const ttsProvider = typeof this.tts?.getActiveProvider === 'function'
+      ? this.tts.getActiveProvider()
+      : 'system';
+    const isRemoteVoice = ttsProvider === '429';
+    const ttsStartMessage = isRemoteVoice ? 'Generating 429 voice...' : 'Preparing speech...';
     this.emit('status', { state: 'speaking', message: ttsStartMessage });
     this.emit('tts_progress', {
       provider: ttsProvider,
       phase: 'start',
-      progress: ttsProvider === 'coqui' ? 8 : 0,
+      progress: isRemoteVoice ? 8 : 0,
       message: ttsStartMessage,
     });
 
@@ -177,7 +180,7 @@ class Assistant extends EventEmitter {
         provider: ttsProvider,
         phase: 'ready',
         progress: 100,
-        message: ttsProvider === 'coqui' ? 'Cloned speech ready' : 'Speech ready',
+        message: isRemoteVoice ? '429 voice ready' : 'Speech ready',
         elapsedMs,
       });
     } catch (err) {

@@ -1,13 +1,13 @@
 ---
-title: Voice Cloning
+title: 429 Voice
 layout: default
 nav_order: 5
 ---
 
-# Voice Cloning
+# 429 Voice
 {: .no_toc }
 
-Jennifer can speak in a cloned voice using the embedded **Coqui XTTS v2** service. No ElevenLabs account or API key is required.
+Jennifer can speak through 429 Inference voice when you provide a 429 API key and a saved voice source sample. If 429 voice is not configured, Jennifer uses the system voice by default.
 
 <details open markdown="block">
 <summary>Table of contents</summary>
@@ -24,106 +24,70 @@ Jennifer can speak in a cloned voice using the embedded **Coqui XTTS v2** servic
 Text response
      │
      ▼
-CoquiTTSProvider
-     │  POST /api/tts { text, voice }
+Remote429TTSProvider
+     │  POST /v1/tts/synthesize { text, voice }
      ▼
-Embedded Flask server: tts/server.py (localhost:5123)
-     │  XTTS v2 model (~1.8GB)
+429 Inference Chatterbox Turbo
+     │
      ▼
-MP3 audio in cloned voice
+MP3 audio
      │
      ▼
 Browser plays it
 ```
 
-The embedded server runs locally, generates audio using the XTTS v2 model, and Jennifer streams it back to you.
+The source sample is stored under `data/voices/` and sent to 429 Inference for synthesis.
 
 ---
 
 ## Setup
 
-### 1. Set up the local TTS environment
+### 1. Configure a key
+
+Use `/settings` or add this to `.env`:
 
 ```bash
-./scripts/install.sh
+TTS_PROVIDER=429
+# Optional: if omitted, Jennifer can reuse 429-API-KEY.
+429-VOICE-API-KEY=your_voice_key_here
 ```
 
-When prompted, opt into voice cloning. This creates `tts/.venv`, installs the Python dependencies, and can optionally pre-download the XTTS v2 model.
-
-> **Python 3.11 required.** On Arch Linux, `install.sh` will offer to install `python311` from the AUR. On Ubuntu/Mint, it will install via the deadsnakes PPA. Python 3.9–3.11 are all supported; Python 3.12+ is not compatible with Coqui TTS 0.22.0.
-
-### 2. Record a voice sample in Jennifer
-
-You need 10–30 seconds of clean audio in the voice you want to clone.
+### 2. Save a voice source
 
 - Start Jennifer with `./scripts/deploy-locally.sh`
 - Open [http://localhost:3000/settings](http://localhost:3000/settings)
-- Use the Voice Cloning tab to record and activate a voice sample
+- Choose `429 Inference (Chatterbox Turbo)` in the Voice tab
+- Record or upload a clean 20-30 second source sample
+- Click `Use` next to the saved source
 
-For best results:
-- Record in a quiet environment
-- Speak naturally, not reading a list
-- Aim for 20–30 seconds of clean speech
+### 3. Test speech
 
-### 3. Configure Jennifer
-
-Add to `.env`:
-
-```bash
-TTS_PROVIDER=coqui
-COQUI_URL=http://localhost:5123
-# Optional if you want to bypass the Settings page active voice:
-COQUI_SPEAKER_WAV=/Users/you/path/to/voice_sample.wav
-```
-
-### 4. Start Jennifer
-
-```bash
-./scripts/deploy-locally.sh
-```
-
-The deploy script starts `tts/server.py` automatically, waits for XTTS to load, then starts Jennifer. Jennifer logs `[boot] Using Coqui XTTS v2 voice` when the integration is active.
+Click `Test` in the Voice tab. Jennifer should play "This is a test."
 
 ---
 
 ## Fallback Behavior
 
-If the Coqui server is unreachable at startup, Jennifer automatically falls back to system TTS (macOS `say` / Linux `espeak-ng`) — you won't get an error, just the default voice.
+If 429 voice fails during a conversation, Jennifer falls back to the system voice for that response. Configuration problems appear in the Voice tab test result so they can be fixed without checking server logs.
 
-To check which TTS is active:
+To check which TTS provider is active:
 
 ```bash
 curl http://localhost:3000/api/health
-# look for tts.activeProvider == "coqui"
-```
-
----
-
-## Supported Languages
-
-XTTS v2 supports 16+ languages. Jennifer defaults to `en` (English). To change:
-
-Edit `src/tts/CoquiTTSProvider.js`:
-
-```js
-const payload = { text, language: 'fr' };  // French
 ```
 
 ---
 
 ## Troubleshooting
 
-**"Coqui server unavailable"**
-- Make sure `.env` says exactly `TTS_PROVIDER=coqui`
-- Re-run `./scripts/install.sh` and opt into voice cloning if `tts/.venv` is missing
-- Check the embedded service: `curl http://localhost:5123/api/health`
-- Check logs: `tail -f tts/server.log`
+**"429 TTS API key is not configured"**
+- Add `429-VOICE-API-KEY` to `.env`, or save the key in `/settings`.
+- If you do not need a separate voice key, Jennifer can reuse `429-API-KEY`.
 
-**Voice sounds robotic or wrong**
-- Use a longer, cleaner voice sample (30+ seconds)
-- Ensure sample and output are in the same language
-- Avoid background noise in the sample
+**"429 TTS needs a saved voice source"**
+- Record or upload a source sample in the Voice tab.
+- Click `Use` next to that saved source before testing.
 
-**First synthesis is slow**
-- XTTS v2 loads the model at startup.
-- CPU synthesis can still take several seconds per short response.
+**Voice source file is missing**
+- The selected file under `data/voices/` was deleted.
+- Upload or record a new source sample and select it.

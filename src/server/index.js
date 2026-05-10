@@ -6,9 +6,9 @@ const { createApp, attachWebSocket } = require('./app');
 
 const WhisperProvider = require('../stt/WhisperProvider');
 const SystemTTSProvider = require('../tts/SystemTTSProvider');
-const CoquiTTSProvider = require('../tts/CoquiTTSProvider');
 const Remote429TTSProvider = require('../tts/Remote429TTSProvider');
 const DynamicTTSProvider = require('../tts/DynamicTTSProvider');
+const { resolve429VoicePath } = require('../tts/default429Voice');
 const ToolRegistry = require('../tools/ToolRegistry');
 const WebFetchTool = require('../tools/WebFetchTool');
 const ShellTool = require('../tools/ShellTool');
@@ -32,35 +32,26 @@ async function main() {
   const stt = new WhisperProvider({ whisperModel: config.whisperModel });
 
   const systemTTS = new SystemTTSProvider();
-  const coquiTTS = new CoquiTTSProvider({
-    coquiUrl: config.coquiUrl,
-    coquiSpeakerWav: config.coquiSpeakerWav,
-    ttsTimeoutMs: config.ttsTimeoutMs,
-  });
   const remote429TTS = new Remote429TTSProvider();
-
-  // Initialise local Coqui if available (non-fatal)
-  try {
-    await coquiTTS.initialize();
-    console.log('[boot] Coqui XTTS v2 ready');
-  } catch {
-    console.log('[boot] Coqui unavailable — local TTS provider will fall back to system');
-  }
 
   const tts = new DynamicTTSProvider({
     system: systemTTS,
-    local: coquiTTS,
     remote429: remote429TTS,
   });
 
-  // Seed TTS settings from env on first run / when values are missing
+  // Seed TTS settings from env on first run / when values are missing.
   const savedTts = settings.get('tts');
   const ttsPatch = {};
-  if (!savedTts?.provider) {
-    ttsPatch.provider = config.ttsProvider === 'coqui' ? 'local' : 'system';
+  if (!savedTts?.provider || !['system', '429'].includes(savedTts.provider)) {
+    ttsPatch.provider = config.ttsProvider;
   }
   if (config.apiVoiceKey429 && !savedTts?.apiKey429) {
     ttsPatch.apiKey429 = config.apiVoiceKey429;
+  }
+  const effectiveProvider = ttsPatch.provider || savedTts?.provider || config.ttsProvider;
+  const resolvedVoiceRef429 = resolve429VoicePath(savedTts?.voiceRef429);
+  if (effectiveProvider === '429' && resolvedVoiceRef429 && resolvedVoiceRef429 !== savedTts?.voiceRef429) {
+    ttsPatch.voiceRef429 = resolvedVoiceRef429;
   }
   if (Object.keys(ttsPatch).length) settings.set('tts', ttsPatch);
   console.log(`[boot] Active TTS provider: ${settings.get('tts').provider}`);

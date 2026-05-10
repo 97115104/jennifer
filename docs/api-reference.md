@@ -41,8 +41,8 @@ curl http://localhost:3000/api/health
   "status": "ok",
   "version": "1.0.0",
   "tts": {
-    "configuredProvider": "coqui",
-    "activeProvider": "coqui"
+    "configuredProvider": "429",
+    "activeProvider": "429"
   },
   "tools": ["fetch_url", "execute_shell", "read_file", "write_file", "send_email"]
 }

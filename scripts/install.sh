@@ -4,8 +4,6 @@
 
 set -euo pipefail
 JENNIFER_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-TTS_DIR="$JENNIFER_ROOT/tts"
-VENV_DIR="$TTS_DIR/.venv"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 ok()   { echo -e "${GREEN}✅  $*${NC}"; }
@@ -149,18 +147,22 @@ if ! command -v node &>/dev/null; then
   elif [[ "$DISTRO" == "arch" ]]; then
     pkg_install nodejs npm
   elif [[ "$DISTRO" == "debian" ]]; then
-    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
     sudo apt-get install -y nodejs
   else
-    err "Install Node.js 18+ from https://nodejs.org and re-run"
+    err "Install Node.js 22.5+ from https://nodejs.org and re-run"
   fi
 fi
+NODE_VERSION=$(node -e "process.stdout.write(process.versions.node)")
 NODE_MAJOR=$(node -e "process.stdout.write(process.versions.node.split('.')[0])")
-[ "$NODE_MAJOR" -lt 18 ] && err "Node.js v18+ required (found v$(node --version))"
+NODE_MINOR=$(node -e "process.stdout.write(process.versions.node.split('.')[1])")
+if [ "$NODE_MAJOR" -lt 22 ] || { [ "$NODE_MAJOR" -eq 22 ] && [ "$NODE_MINOR" -lt 5 ]; }; then
+  err "Node.js v22.5+ required (found v${NODE_VERSION}). Install with: nvm install 22 && nvm use 22"
+fi
 ok "Node.js $(node --version)"
 
 if ! command -v npm &>/dev/null; then
-  err "npm not found. Reinstall Node.js 18+ with npm included, then re-run."
+  err "npm not found. Reinstall Node.js 22.5+ with npm included, then re-run."
 fi
 ok "npm $(npm --version)"
 
@@ -201,8 +203,11 @@ ok "Node.js packages installed"
 if [ ! -f "$JENNIFER_ROOT/.env" ]; then
   info "Creating .env from template..."
   cat > "$JENNIFER_ROOT/.env" <<'ENVEOF'
-# TTS provider: system (macOS say / Linux espeak-ng) | coqui (voice cloning — run install.sh first)
+# TTS provider: system (macOS say / Linux espeak-ng) | 429 (429 Inference voice)
 TTS_PROVIDER=system
+
+# Optional 429 Inference voice key. If omitted, the app can reuse 429-API-KEY.
+# 429-VOICE-API-KEY=
 
 # OAuth credentials (configure in /settings after starting)
 # GOOGLE_CLIENT_ID=
@@ -215,143 +220,10 @@ else
   ok ".env already exists"
 fi
 
-info "AI provider and API keys are configured in the Settings UI (/settings)."
+info "AI and voice provider API keys are configured in the Settings UI (/settings)."
 info "The local database (data/jennifer.db) is created automatically on first start."
 
-# ─── Python + Coqui TTS setup ────────────────────────────────────────────────
-echo ""
-echo "─────────────────────────────────────────"
-info "Voice Cloning Setup (Coqui XTTS v2)"
-echo "─────────────────────────────────────────"
-echo ""
-
-PYTHON_CMD=""
-for py in python3.11 python3.10 python3.9 python3 python; do
-  if command -v "$py" &>/dev/null; then
-    PY_VER=$($py --version 2>&1 | awk '{print $2}')
-    if [[ "$PY_VER" =~ ^([0-9]+)\.([0-9]+) ]]; then
-      PY_MAJOR="${BASH_REMATCH[1]}"
-      PY_MINOR="${BASH_REMATCH[2]}"
-    else
-      continue
-    fi
-
-    if [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -ge 9 ] && [ "$PY_MINOR" -le 11 ]; then
-      PYTHON_CMD="$py"
-      ok "Python $PY_VER at $(command -v "$py")"
-      break
-    fi
-  fi
-done
-
-if [ -z "$PYTHON_CMD" ]; then
-  warn "Python 3.9–3.11 not found — voice cloning requires it"
-  if [[ "$OS" == "mac" ]]; then
-    warn "Install via Homebrew:  brew install python@3.11"
-    warn "Skipping voice cloning setup."
-  elif [[ "$DISTRO" == "arch" ]]; then
-    AUR_HELPER=""
-    for h in yay paru; do command -v "$h" &>/dev/null && AUR_HELPER="$h" && break; done
-
-    if [ -n "$AUR_HELPER" ]; then
-      prompt_reply "Arch ships Python 3.12+; install python311 from AUR via $AUR_HELPER? [y/N] " INSTALL_PY311
-      if no_reply "$INSTALL_PY311"; then
-        info "Installing python311 via $AUR_HELPER..."
-        "$AUR_HELPER" -S --noconfirm python311
-        if command -v python3.11 &>/dev/null; then
-          PYTHON_CMD="python3.11"
-          ok "Python 3.11 installed: $(python3.11 --version)"
-        else
-          warn "python311 installed but python3.11 not found on PATH — skipping voice cloning."
-        fi
-      else
-        warn "Skipping voice cloning setup."
-      fi
-    else
-      warn "No AUR helper found. Install Python 3.11 manually:"
-      warn "  yay -S python311  OR  pyenv install 3.11"
-      warn "Skipping voice cloning setup."
-    fi
-  elif [[ "$DISTRO" == "debian" ]]; then
-    prompt_reply "Install Python 3.11 via deadsnakes PPA? (Ubuntu/Mint/Pop) [y/N] " INSTALL_PY311_DEB
-    if no_reply "$INSTALL_PY311_DEB"; then
-      info "Installing Python 3.11 via deadsnakes PPA..."
-      sudo apt-get install -y software-properties-common
-      sudo add-apt-repository -y ppa:deadsnakes/ppa
-      sudo apt-get update -q
-      sudo apt-get install -y python3.11 python3.11-venv python3.11-dev
-      if command -v python3.11 &>/dev/null; then
-        PYTHON_CMD="python3.11"
-        ok "Python 3.11 installed: $(python3.11 --version)"
-      else
-        warn "python3.11 not found after install — skipping voice cloning."
-      fi
-    else
-      warn "Skipping voice cloning setup."
-    fi
-  else
-    warn "Skipping voice cloning setup."
-  fi
-fi
-
-if [ -n "$PYTHON_CMD" ]; then
-  prompt_reply "Set up voice cloning (Coqui XTTS v2)? Requires ~4GB disk. [y/N] " SETUP_TTS
-  if no_reply "$SETUP_TTS"; then
-    [ -f "$TTS_DIR/requirements.txt" ] || err "Missing $TTS_DIR/requirements.txt"
-    [ -f "$TTS_DIR/server.py" ] || err "Missing $TTS_DIR/server.py"
-
-    # Install system-level audio/speech deps needed by Coqui TTS
-    if [[ "$OS" == "linux" ]]; then
-      info "Installing system dependencies for Coqui TTS..."
-      if [[ "$DISTRO" == "arch" ]]; then
-        pkg_install espeak-ng libsndfile
-      elif [[ "$DISTRO" == "debian" ]]; then
-        sudo apt-get update
-        pkg_install espeak-ng libsndfile1 libsndfile1-dev python3-dev build-essential
-      fi
-    fi
-
-    if [ ! -d "$VENV_DIR" ]; then
-      info "Creating Python venv in tts/.venv..."
-      "$PYTHON_CMD" -m venv "$VENV_DIR"
-      ok "venv created"
-    else
-      ok "venv already exists at tts/.venv"
-    fi
-
-    info "Upgrading pip..."
-    "$VENV_DIR/bin/pip" install --upgrade pip --quiet
-
-    info "Installing TTS packages (torch, Coqui TTS, pydub, flask)..."
-    "$VENV_DIR/bin/pip" install -r "$TTS_DIR/requirements.txt"
-    ok "TTS packages installed"
-
-    echo ""
-    prompt_reply "Pre-download XTTS v2 model now? (~2GB, avoids delay on first start) [y/N] " DOWNLOAD_MODEL
-    if no_reply "$DOWNLOAD_MODEL"; then
-      info "Downloading XTTS v2 model (may take several minutes)..."
-      "$VENV_DIR/bin/python" - <<'PYEOF'
-import os
-os.environ["COQUI_TOS_AGREED"] = "1"
-from TTS.api import TTS
-print("Fetching tts_models/multilingual/multi-dataset/xtts_v2 ...")
-TTS("tts_models/multilingual/multi-dataset/xtts_v2")
-print("Model ready.")
-PYEOF
-      ok "XTTS v2 model downloaded"
-    else
-      warn "Model downloads on first use (adds ~2-5 min to first startup)"
-    fi
-
-    info "Updating TTS_PROVIDER=coqui in .env..."
-    set_env_value TTS_PROVIDER coqui
-    ok ".env: TTS_PROVIDER=coqui"
-
-    ok "Voice cloning ready — record a sample in /settings after starting Jennifer."
-  else
-    info "Skipping voice cloning. Run install.sh again to set it up later."
-  fi
-fi
+info "Local voice server setup is no longer required. Use system voice or 429 Inference voice in /settings."
 
 # ─── Whisper model pre-download ──────────────────────────────────────────────
 echo ""

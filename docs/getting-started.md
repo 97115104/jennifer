@@ -20,7 +20,7 @@ nav_order: 2
 
 | Requirement | Version | Notes |
 |-------------|---------|-------|
-| Node.js | 18+ | [nodejs.org](https://nodejs.org) — auto-installed on Arch/Debian by `install.sh` |
+| Node.js | 22.5+ | [nodejs.org](https://nodejs.org) — auto-installed on Arch/Debian by `install.sh` |
 | ffmpeg | any | Auto-installed by `install.sh` |
 | espeak-ng | any | Auto-installed by `install.sh` on Linux (system TTS) |
 | Chrome | any | Required for wake word (Web Speech API) |
@@ -44,14 +44,11 @@ cd jennifer
 ```
 
 This will:
-- Check for Node.js 18+ and ffmpeg (auto-installs both on Arch and Debian/Ubuntu)
+- Check for Node.js 22.5+ and ffmpeg (auto-installs both on Arch and Debian/Ubuntu)
 - Install `espeak-ng` on Linux for system TTS
 - Run `npm install`
 - Create a `.env` template
-- On **Arch**: prompt to install Python 3.11 from the AUR (`python311`) for voice cloning
-- On **Ubuntu / Linux Mint**: prompt to install Python 3.11 via the deadsnakes PPA for voice cloning
 - Optionally pre-download the Whisper model (~150MB)
-- Optionally set up Coqui voice cloning
 
 ### 3. Configure your API key
 
@@ -89,12 +86,11 @@ All configuration is in `.env`:
 
 # TTS provider:
 #   system — built-in (macOS: say / Linux: espeak-ng — no extra setup)
-#   coqui  — voice cloning via Coqui XTTS v2 (requires install.sh voice cloning setup)
+#   429    — 429 Inference voice using a saved voice source
 TTS_PROVIDER=system
 
-# For voice cloning (Coqui XTTS v2)
-# COQUI_URL=http://localhost:5123
-# COQUI_SPEAKER_WAV=/path/to/voice_sample.wav  # optional; settings UI can manage this
+# Optional 429 Inference voice key. If omitted, Jennifer can reuse 429-API-KEY.
+# 429-VOICE-API-KEY=your_voice_key_here
 
 # Email tool (optional)
 # SMTP_HOST=smtp.gmail.com

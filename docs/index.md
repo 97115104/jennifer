@@ -23,7 +23,7 @@ Jennifer is a locally-hosted AI voice assistant built with Node.js. It:
 - Records your question until 3 seconds of silence
 - Transcribes audio locally using **Whisper** (no STT API cost)
 - Sends the transcript to the **429 Inference API** for a response
-- Speaks the answer aloud using your system voice or a **cloned voice**
+- Speaks the answer aloud using your system voice or **429 Inference voice**
 - Can take **real actions** via tools: fetch URLs, run shell commands, send email, read/write files
 
 ## Key Features
@@ -33,10 +33,10 @@ Jennifer is a locally-hosted AI voice assistant built with Node.js. It:
 | Wake word | "Ok Jennifer" via Web Speech API |
 | STT | Whisper (local, via `@xenova/transformers`) |
 | Inference | 429inference.com — `gpt-oss` reasoning model |
-| TTS | macOS `say` / Linux `espeak-ng` / Coqui XTTS v2 |
+| TTS | macOS `say` / Linux `espeak-ng` / 429 Inference voice |
 | Tools | fetch_url, execute_shell, read_file, write_file, send_email |
 | API | REST + WebSocket — connects Raspberry Pi and other devices |
-| Voice cloning | Embedded Coqui XTTS v2 service |
+| Voice | Optional 429 Inference voice from a saved source sample |
 
 ## Example Queries
 

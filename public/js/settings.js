@@ -32,9 +32,7 @@ document.addEventListener('click', e => {
   if (!btn) return;
   const action = btn.dataset.action;
   const name = btn.dataset.name;
-  if (action === 'set-voice') setActiveVoice(name || null);
-  else if (action === 'deactivate-voice') setActiveVoice(null);
-  else if (action === 'set-voice-ref429') setVoiceRef429(name || null);
+  if (action === 'set-voice-ref429') setVoiceRef429(name || null);
   else if (action === 'deactivate-voice-ref429') setVoiceRef429(null);
   else if (action === 'delete-voice') deleteVoice(name);
   else if (action === 'disconnect-google') disconnectGoogle();
@@ -462,15 +460,15 @@ async function saveVoiceBlob(name, blob, filename) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
-    // Auto-activate the voice we just recorded
+    // Auto-select the voice source for 429 voice.
     const savedName = data.name;
-    await fetch('/api/settings/voices/active', {
+    await fetch('/api/settings/voices/ref429', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: savedName }),
     });
 
-    showToast(`Voice "${savedName}" saved and activated`, 'success');
+    showToast(`Voice "${savedName}" saved and selected`, 'success');
     document.getElementById('voice-name').value = '';
     if (voiceFileInput) voiceFileInput.value = '';
     await loadSettings();
@@ -484,8 +482,7 @@ async function saveVoiceBlob(name, blob, filename) {
 
 function _showTTSSection(provider) {
   document.getElementById('tts-429-section').style.display   = provider === '429'   ? '' : 'none';
-  document.getElementById('tts-local-section').style.display = provider === 'local' ? '' : 'none';
-  document.getElementById('tts-voice-section').style.display = (provider === 'local' || provider === '429') ? '' : 'none';
+  document.getElementById('tts-voice-section').style.display = provider === '429' ? '' : 'none';
 }
 
 function renderTTS(tts = {}) {
@@ -595,44 +592,26 @@ function renderVoices(voices = [], tts = {}) {
   const list = document.getElementById('voice-list');
   if (!list) return;
 
-  const provider = document.getElementById('tts-provider-select')?.value || 'local';
-  const is429 = provider === '429';
-
   if (!voices.length) {
     list.innerHTML = '<li style="color:var(--text-muted);font-size:0.85rem;padding:4px 0">No voices saved yet — record one above.</li>';
     return;
   }
 
   list.innerHTML = voices.map(v => {
-    const isActive = is429
-      ? (tts.voiceRef429Label || '') === `${v.name}.wav`
-      : (tts.activeVoice || '').includes(`${v.name}.wav`);
-    const setAction        = is429 ? 'set-voice-ref429'   : 'set-voice';
-    const deactivateAction = is429 ? 'deactivate-voice-ref429' : 'deactivate-voice';
+    const selectedLabel = tts.voiceRef429Label || (voices.some(voice => voice.name === 'steve') ? 'steve.wav' : '');
+    const isActive = selectedLabel === `${v.name}.wav`;
     return `
       <li class="voice-item" data-name="${v.name}">
         <span class="voice-name">${v.name}</span>
         ${isActive ? '<span class="active-tag">Active</span>' : ''}
         ${!isActive
-          ? `<button class="btn ghost" style="padding:5px 12px;font-size:0.8rem" data-action="${setAction}" data-name="${v.name}">Use</button>`
-          : `<button class="btn ghost" style="padding:5px 12px;font-size:0.8rem" data-action="${deactivateAction}">Deactivate</button>`
+          ? `<button class="btn ghost" style="padding:5px 12px;font-size:0.8rem" data-action="set-voice-ref429" data-name="${v.name}">Use</button>`
+          : `<button class="btn ghost" style="padding:5px 12px;font-size:0.8rem" data-action="deactivate-voice-ref429">Deactivate</button>`
         }
         <a class="btn ghost" style="padding:5px 12px;font-size:0.8rem;text-decoration:none" href="/api/settings/voices/${encodeURIComponent(v.name)}/download">Download</a>
         <button class="btn danger" style="padding:5px 12px;font-size:0.8rem" data-action="delete-voice" data-name="${v.name}">Delete</button>
       </li>`;
   }).join('');
-}
-
-async function setActiveVoice(name) {
-  const res = await fetch('/api/settings/voices/active', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
-  });
-  if (res.ok) {
-    showToast(name ? `"${name}" set as active voice` : 'Voice deactivated', 'success');
-    await loadSettings();
-  }
 }
 
 async function setVoiceRef429(name) {

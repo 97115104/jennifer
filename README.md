@@ -42,7 +42,7 @@ Browser (Chrome)
                                                 │         execute_shell
                                                 │         read_file / write_file
                                                 │         send_email
-                                                └─ TTS (system / Coqui XTTS v2)
+                                                └─ TTS (system / 429 Inference voice)
                                                         ↓
                                                WebSocket → Browser plays audio
 ```
@@ -57,7 +57,7 @@ Browser (Chrome)
 - **Tool system** — extensible plugin registry; model picks the right tool
 - **Memory variables** — save contacts, URLs, blogs, and reusable values at `/memory`
 - **System TTS** — macOS `say` / Linux `espeak-ng` / Windows SAPI — installed automatically on Linux
-- **Voice cloning** — embedded Coqui XTTS v2 service (no ElevenLabs)
+- **429 voice** — Chatterbox Turbo voice through 429 Inference with a saved source sample
 - **REST + WebSocket API** — connect any device (Raspberry Pi, mobile, etc.)
 
 ---
@@ -91,7 +91,7 @@ jennifer/
 │   │   └── InferenceClient.js   — 429 API + tool-call loop
 │   ├── tts/
 │   │   ├── SystemTTSProvider.js — macOS say / Linux espeak-ng / Windows SAPI
-│   │   └── CoquiTTSProvider.js  — XTTS v2 voice cloning
+│   │   └── Remote429TTSProvider.js — 429 Inference voice
 │   ├── tools/
 │   │   ├── ToolRegistry.js      — plugin system
 │   │   ├── WebFetchTool.js      — fetch any URL
@@ -141,20 +141,19 @@ Server → { type: "error",      message }
 
 ---
 
-## Voice Cloning
+## 429 Voice
 
-Set `TTS_PROVIDER=coqui` in `.env` to use the embedded Coqui XTTS v2 voice-cloning service:
+Set `TTS_PROVIDER=429` in `.env` or choose 429 Inference in `/settings` to use 429 voice:
 
 ```bash
-TTS_PROVIDER=coqui
-COQUI_URL=http://localhost:5123
-# Optional: the Settings page stores recorded voices under data/voices/
-COQUI_SPEAKER_WAV=/path/to/voice_sample.wav
+TTS_PROVIDER=429
+# Optional: if omitted, Jennifer can reuse 429-API-KEY.
+429-VOICE-API-KEY=your_voice_key_here
 ```
 
-Run `./scripts/install.sh` and opt into voice cloning to create `tts/.venv`. After that, `./scripts/deploy-locally.sh` starts the XTTS service automatically before Jennifer.
+Record or upload a voice source in `/settings`, then click `Use` next to that saved source. Without 429 voice configuration, Jennifer uses the system voice by default.
 
-See [Voice Cloning docs](https://97115104.github.io/jennifer/voice-cloning) for full setup.
+See [429 Voice docs](https://97115104.github.io/jennifer/voice-cloning) for full setup.
 
 ---
 
@@ -185,10 +184,9 @@ See [Raspberry Pi docs](https://97115104.github.io/jennifer/raspberry-pi).
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `429-API-KEY` | — | **Required.** Get at 429inference.com |
-| `TTS_PROVIDER` | `system` | `system` or `coqui` |
-| `COQUI_URL` | `http://localhost:5123` | Coqui server URL |
-| `COQUI_SPEAKER_WAV` | — | Path to voice sample WAV |
-| `TTS_TIMEOUT_MS` | `0` | Coqui synthesis timeout; `0` disables the client timeout |
+| `429-VOICE-API-KEY` | `429-API-KEY` | Optional separate key for 429 voice |
+| `TTS_PROVIDER` | `system` | `system` or `429` |
+| `TTS_TIMEOUT_MS` | `0` | Reserved for TTS requests; `0` disables the client timeout |
 | `API_MAX_TOKENS` | `8192` | Maximum model response tokens |
 | `API_TIMEOUT_MS` | `120000` | Inference request timeout in milliseconds |
 | `FETCH_MAX_CHARS` | `50000` | Maximum readable characters returned by one fetch |
@@ -205,11 +203,10 @@ See [Raspberry Pi docs](https://97115104.github.io/jennifer/raspberry-pi).
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 22.5+
 - ffmpeg — auto-installed by `install.sh`; or manually: `brew install ffmpeg` / `sudo apt install ffmpeg` / `sudo pacman -S ffmpeg`
 - espeak-ng — auto-installed by `install.sh` on Linux (system TTS)
 - Chrome (for wake word — Web Speech API)
-- Python 3.11 (optional, for Coqui voice cloning — `install.sh` offers to install it automatically)
 
 ---
 

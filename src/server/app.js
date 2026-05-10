@@ -86,7 +86,9 @@ function createApp(assistant) {
   });
 
   app.get('/api/health', (req, res) => {
-    const activeTTSProvider = assistant.tts?.constructor?.name === 'CoquiTTSProvider' ? 'coqui' : 'system';
+    const activeTTSProvider = typeof assistant.tts?.getActiveProvider === 'function'
+      ? assistant.tts.getActiveProvider()
+      : 'system';
 
     res.json({
       status: 'ok',

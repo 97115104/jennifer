@@ -82,66 +82,12 @@ if ENV_PORT="$(read_dotenv_value PORT)"; then
 fi
 
 case "${TTS_PROVIDER:-system}" in
-  system|coqui) ;;
+  system|429) ;;
   *)
-    echo "❌  Invalid TTS_PROVIDER='${TTS_PROVIDER}'. Use 'system' or 'coqui'."
+    echo "❌  Invalid TTS_PROVIDER='${TTS_PROVIDER}'. Use 'system' or '429'."
     exit 1
     ;;
 esac
-
-# ── Coqui TTS server (only when TTS_PROVIDER=coqui) ──────────────────────────
-
-TTS_PID=""
-VENV_PYTHON="$ROOT/tts/.venv/bin/python"
-
-if [[ "${TTS_PROVIDER:-system}" == "coqui" ]]; then
-  echo ""
-  echo "🎤  Voice cloning enabled (Coqui XTTS v2)"
-
-  if [ ! -f "$VENV_PYTHON" ]; then
-    echo "❌  TTS venv not found at tts/.venv"
-    echo "    Run ./scripts/install.sh first to set up voice cloning"
-    exit 1
-  fi
-
-  # Kill any stale TTS server on port 5123
-  if lsof -ti:5123 &>/dev/null; then
-    echo "   Stopping existing TTS server on :5123..."
-    lsof -ti:5123 | xargs kill -9 2>/dev/null || true
-    sleep 1
-  fi
-
-  echo "   Starting TTS server (XTTS v2 model loading...)"
-  "$VENV_PYTHON" "$ROOT/tts/server.py" > "$ROOT/tts/server.log" 2>&1 &
-  TTS_PID=$!
-
-  # Wait up to 3 minutes for model to load (first run may also download it)
-  echo "   Waiting for TTS model to load (up to 3 min — first run downloads ~2GB)..."
-  TTS_READY=false
-  for i in $(seq 1 180); do
-    if curl -s "http://localhost:5123/api/health" 2>/dev/null | grep -q '"model_loaded":true'; then
-      TTS_READY=true
-      break
-    fi
-    # Show log tail every 15 seconds
-    if (( i % 15 == 0 )); then
-      LAST_LOG=$(tail -1 "$ROOT/tts/server.log" 2>/dev/null || echo "...")
-      echo "   [${i}s] $LAST_LOG"
-    fi
-    sleep 1
-  done
-
-  if [ "$TTS_READY" = false ]; then
-    echo ""
-    echo "⚠   TTS server didn't become ready in 3 minutes"
-    echo "    Check logs: tail -f $ROOT/tts/server.log"
-    echo "    Continuing with system TTS fallback..."
-    kill "$TTS_PID" 2>/dev/null || true
-    TTS_PID=""
-  else
-    echo "✅  TTS server ready"
-  fi
-fi
 
 # ── Start Jennifer ────────────────────────────────────────────────────────────
 
@@ -169,8 +115,8 @@ done
 
 echo ""
 echo "✅  Jennifer is running at http://localhost:$PORT"
-if [[ "${TTS_PROVIDER:-system}" == "coqui" && -n "$TTS_PID" ]]; then
-  echo "   Voice cloning: active (XTTS v2)"
+if [[ "${TTS_PROVIDER:-system}" == "429" ]]; then
+  echo "   Voice: 429 Inference"
 fi
 echo ""
 
@@ -184,15 +130,11 @@ fi
 echo "   Press Ctrl+C to stop"
 echo ""
 
-# Cleanup on exit — kill both servers
+# Cleanup on exit
 cleanup() {
   echo ""
   echo "Shutting down..."
   kill "$SERVER_PID" 2>/dev/null || true
-  if [ -n "$TTS_PID" ]; then
-    kill "$TTS_PID" 2>/dev/null || true
-    echo "   TTS server stopped"
-  fi
   exit 0
 }
 
