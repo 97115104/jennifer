@@ -23,8 +23,8 @@ class DynamicTTSProvider extends TTSProvider {
     try {
       return await impl.synthesize(text, outputPath);
     } catch (err) {
-      if (provider !== 'system') {
-        console.warn(`[tts] ${provider} failed (${err.message}) — falling back to system`);
+      if (provider !== 'system' && err.allowSystemFallback === true) {
+        console.warn(`[tts] ${provider} API failed (${err.message}) — falling back to system`);
         return await this._providers.system.synthesize(text, outputPath);
       }
       throw err;
