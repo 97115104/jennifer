@@ -7,6 +7,8 @@ const { createApp, attachWebSocket } = require('./app');
 const WhisperProvider = require('../stt/WhisperProvider');
 const SystemTTSProvider = require('../tts/SystemTTSProvider');
 const CoquiTTSProvider = require('../tts/CoquiTTSProvider');
+const Remote429TTSProvider = require('../tts/Remote429TTSProvider');
+const DynamicTTSProvider = require('../tts/DynamicTTSProvider');
 const ToolRegistry = require('../tools/ToolRegistry');
 const WebFetchTool = require('../tools/WebFetchTool');
 const ShellTool = require('../tools/ShellTool');
@@ -29,28 +31,39 @@ async function main() {
 
   const stt = new WhisperProvider({ whisperModel: config.whisperModel });
 
-  let tts;
-  if (config.ttsProvider === 'coqui') {
-    const coqui = new CoquiTTSProvider({
-      coquiUrl: config.coquiUrl,
-      coquiSpeakerWav: config.coquiSpeakerWav,
-      ttsTimeoutMs: config.ttsTimeoutMs,
-    });
-    try {
-      await coqui.initialize();
-      tts = coqui;
-      settings.set('tts', { provider: 'coqui' });
-      console.log('[boot] Using Coqui XTTS v2 voice');
-    } catch {
-      console.log('[boot] Coqui unavailable — using system TTS');
-      tts = new SystemTTSProvider();
-      settings.set('tts', { provider: 'system' });
-    }
-  } else {
-    tts = new SystemTTSProvider();
-    settings.set('tts', { provider: 'system' });
-    console.log('[boot] Using system TTS');
+  const systemTTS = new SystemTTSProvider();
+  const coquiTTS = new CoquiTTSProvider({
+    coquiUrl: config.coquiUrl,
+    coquiSpeakerWav: config.coquiSpeakerWav,
+    ttsTimeoutMs: config.ttsTimeoutMs,
+  });
+  const remote429TTS = new Remote429TTSProvider();
+
+  // Initialise local Coqui if available (non-fatal)
+  try {
+    await coquiTTS.initialize();
+    console.log('[boot] Coqui XTTS v2 ready');
+  } catch {
+    console.log('[boot] Coqui unavailable — local TTS provider will fall back to system');
   }
+
+  const tts = new DynamicTTSProvider({
+    system: systemTTS,
+    local: coquiTTS,
+    remote429: remote429TTS,
+  });
+
+  // Seed TTS settings from env on first run / when values are missing
+  const savedTts = settings.get('tts');
+  const ttsPatch = {};
+  if (!savedTts?.provider) {
+    ttsPatch.provider = config.ttsProvider === 'coqui' ? 'local' : 'system';
+  }
+  if (config.apiVoiceKey429 && !savedTts?.apiKey429) {
+    ttsPatch.apiKey429 = config.apiVoiceKey429;
+  }
+  if (Object.keys(ttsPatch).length) settings.set('tts', ttsPatch);
+  console.log(`[boot] Active TTS provider: ${settings.get('tts').provider}`);
 
   const tools = new ToolRegistry();
   tools.register(WebFetchTool);

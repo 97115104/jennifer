@@ -83,7 +83,7 @@ async function loadSettings() {
   health = await healthRes.json();
   renderApp(settings.app);
   renderInference(settings.inference);
-  renderTTSStatus(settings.tts, health.tts);
+  renderTTS(settings.tts);
   renderVoices(settings.voices, settings.tts);
   renderGoogle(settings.google);
   renderGitHub(settings.github);
@@ -478,41 +478,103 @@ async function saveVoiceBlob(name, blob, filename) {
   }
 }
 
-function renderTTSStatus(tts = {}, ttsHealth = {}) {
-  const el = document.getElementById('tts-status');
-  if (!el) return;
+// ─── TTS Provider UI ──────────────────────────────────────────────────────────
 
-  const active = ttsHealth.activeProvider || tts.provider || 'system';
-  const configured = ttsHealth.configuredProvider || tts.provider || 'system';
-  const voiceName = tts.activeVoice ? tts.activeVoice.split('/').pop().replace('.wav', '') : null;
-
-  if (active === 'coqui' && voiceName) {
-    el.innerHTML = `
-      <div class="info-banner success">
-        <strong>Voice cloning active: "${voiceName}"</strong><br>
-        Jennifer is using the embedded XTTS v2 service at <code>localhost:5123</code>.
-      </div>`;
-    return;
-  }
-
-  if (active === 'coqui') {
-    el.innerHTML = `
-      <div class="info-banner">
-        Voice cloning is running. Record or activate a voice sample below to use it.
-      </div>`;
-    return;
-  }
-
-  const providerHint = configured === 'coqui'
-    ? 'Jennifer was configured for Coqui, but startup fell back to system TTS. Check <code>tts/server.log</code>.'
-    : 'Set <code>TTS_PROVIDER=coqui</code> in <code>.env</code>, then restart Jennifer to enable voice cloning.';
-
-  el.innerHTML = `
-    <div class="info-banner warning">
-      <strong>Using system TTS.</strong><br>
-      ${voiceName ? `Active voice sample: "${voiceName}". ` : ''}${providerHint}
-    </div>`;
+function _showTTSSection(provider) {
+  document.getElementById('tts-429-section').style.display   = provider === '429'   ? '' : 'none';
+  document.getElementById('tts-local-section').style.display = provider === 'local' ? '' : 'none';
 }
+
+function renderTTS(tts = {}) {
+  const provider = tts.provider || 'system';
+  const sel = document.getElementById('tts-provider-select');
+  if (sel) sel.value = provider;
+
+  const speedInput = document.getElementById('tts-speed');
+  const speedLabel = document.getElementById('tts-speed-label');
+  if (speedInput) { speedInput.value = tts.speed ?? 1.0; }
+  if (speedLabel) { speedLabel.textContent = `${(tts.speed ?? 1.0).toFixed(1)}×`; }
+
+  const autoSpeakCb = document.getElementById('tts-autospeak');
+  if (autoSpeakCb) { autoSpeakCb.checked = tts.autoSpeak !== false; }
+
+  const keyField = document.getElementById('tts-apikey429');
+  if (keyField) { keyField.value = tts.hasApiKey429 ? '***' : ''; }
+
+  const refField = document.getElementById('tts-voiceref429');
+  if (refField) { refField.value = tts.voiceRef429Label || ''; }
+
+  _showTTSSection(provider);
+}
+
+document.getElementById('tts-provider-select')?.addEventListener('change', e => {
+  _showTTSSection(e.target.value);
+});
+
+document.getElementById('tts-speed')?.addEventListener('input', e => {
+  const lbl = document.getElementById('tts-speed-label');
+  if (lbl) lbl.textContent = `${parseFloat(e.target.value).toFixed(1)}×`;
+});
+
+document.getElementById('save-tts-btn')?.addEventListener('click', async () => {
+  const resultEl = document.getElementById('tts-save-result');
+  const MASK = '***';
+
+  const body = {
+    provider:  document.getElementById('tts-provider-select')?.value,
+    speed:     parseFloat(document.getElementById('tts-speed')?.value || '1.0'),
+    autoSpeak: document.getElementById('tts-autospeak')?.checked ?? true,
+  };
+
+  const keyVal = document.getElementById('tts-apikey429')?.value.trim() || '';
+  if (keyVal && keyVal !== MASK) body.apiKey429 = keyVal;
+
+  const refVal = document.getElementById('tts-voiceref429')?.value.trim() || '';
+  if (refVal) body.voiceRef429 = refVal;
+
+  try {
+    const res = await fetch('/api/settings/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    if (resultEl) resultEl.textContent = '';
+    showToast('Voice settings saved', 'success');
+    await loadSettings();
+  } catch (err) {
+    if (resultEl) resultEl.textContent = err.message;
+    showToast('Save failed: ' + err.message, 'error');
+  }
+});
+
+document.getElementById('test-tts-btn')?.addEventListener('click', async () => {
+  const resultEl = document.getElementById('tts-save-result');
+  const healthIcon = document.getElementById('tts-health-icon');
+  const healthDetail = document.getElementById('tts-health-detail');
+  const healthRow = document.getElementById('tts-health-row');
+
+  if (resultEl) resultEl.textContent = 'Checking…';
+  if (healthRow) healthRow.style.display = 'none';
+
+  try {
+    const res = await fetch('/api/settings/tts/health');
+    const data = await res.json();
+
+    if (healthRow) healthRow.style.display = '';
+    if (healthIcon) healthIcon.textContent = data.ok ? '✓ ' : '✗ ';
+    if (healthIcon) healthIcon.style.color = data.ok ? 'var(--success, #4caf50)' : 'var(--error, #e74c3c)';
+    if (healthDetail) healthDetail.textContent = data.detail || '';
+    if (resultEl) resultEl.textContent = '';
+
+    if (data.ok) showToast('TTS provider is reachable', 'success');
+    else showToast(`TTS check failed: ${data.detail}`, 'error');
+  } catch (err) {
+    if (resultEl) resultEl.textContent = err.message;
+    showToast('Health check failed: ' + err.message, 'error');
+  }
+});
 
 function renderVoices(voices = [], tts = {}) {
   const list = document.getElementById('voice-list');

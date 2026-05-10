@@ -11,6 +11,22 @@ const MemoryStore = require('./MemoryStore');
 const Settings = require('./Settings');
 const InferenceClient = require('../inference/InferenceClient');
 
+function stripMarkdown(text) {
+  return text
+    .replace(/```[\s\S]*?```/g, '')        // fenced code blocks
+    .replace(/`[^`]*`/g, '')               // inline code
+    .replace(/^#{1,6}\s+/gm, '')           // headings
+    .replace(/\*\*([^*]+)\*\*/g, '$1')     // bold
+    .replace(/\*([^*]+)\*/g, '$1')         // italic
+    .replace(/__([^_]+)__/g, '$1')         // bold underscore
+    .replace(/_([^_]+)_/g, '$1')           // italic underscore
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // links
+    .replace(/^[\*\-\+]\s+/gm, '')         // unordered list bullets
+    .replace(/^\d+\.\s+/gm, '')            // ordered list numbers
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function getAssistantName() {
   try {
     return Settings.getInstance().get('app')?.name || 'Jennifer';
@@ -154,7 +170,7 @@ class Assistant extends EventEmitter {
     console.log(`[assistant] Synthesizing TTS → ${audioPath}`);
     const t1 = Date.now();
     try {
-      await this.tts.synthesize(responseText, audioPath);
+      await this.tts.synthesize(stripMarkdown(responseText), audioPath);
       const elapsedMs = Date.now() - t1;
       console.log(`[assistant] TTS done in ${elapsedMs}ms`);
       this.emit('tts_progress', {

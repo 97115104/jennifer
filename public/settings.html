@@ -380,7 +380,7 @@
     <div class="tabs">
       <button class="tab-btn active" data-tab="general">General</button>
       <button class="tab-btn" data-tab="model">AI Model</button>
-      <button class="tab-btn" data-tab="voice">Voice Cloning</button>
+      <button class="tab-btn" data-tab="voice">Voice</button>
       <button class="tab-btn" data-tab="google">Google</button>
       <button class="tab-btn" data-tab="github">GitHub</button>
     </div>
@@ -503,12 +503,69 @@
 
     </div>
 
-    <!-- ─── Voice Cloning ──────────────────────────────────────────────────── -->
+    <!-- ─── Voice ──────────────────────────────────────────────────────────── -->
     <div class="tab-panel" id="tab-voice">
 
-      <div id="tts-status"></div>
-
+      <!-- Provider + playback controls -->
       <div class="section">
+        <h3>TTS Provider</h3>
+
+        <div class="form-row">
+          <label>Provider</label>
+          <select id="tts-provider-select">
+            <option value="system">System (espeak-ng / say)</option>
+            <option value="local">Local Clone (Coqui XTTS v2)</option>
+            <option value="429">429 Inference (Chatterbox Turbo)</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label>Speed</label>
+          <input type="range" id="tts-speed" min="0.5" max="2.0" step="0.1" value="1.0" style="flex:1;min-width:0" />
+          <span id="tts-speed-label" style="min-width:2.5rem;text-align:right">1.0×</span>
+        </div>
+
+        <div class="form-row">
+          <label>Auto-Speak</label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="tts-autospeak" />
+            <span style="font-size:0.85rem;color:var(--text-muted)">Play audio automatically after each response</span>
+          </label>
+        </div>
+
+        <div class="form-row" style="margin-top:14px">
+          <button class="btn primary" id="save-tts-btn">Save</button>
+          <button class="btn ghost" id="test-tts-btn" style="margin-left:8px">Test</button>
+          <span id="tts-save-result" style="font-size:0.85rem;color:var(--text-muted);margin-left:10px"></span>
+        </div>
+
+        <div id="tts-health-row" style="margin-top:10px;font-size:0.85rem;display:none">
+          <span id="tts-health-icon"></span>
+          <span id="tts-health-detail"></span>
+        </div>
+      </div>
+
+      <!-- 429 provider config (shown only when provider = 429) -->
+      <div class="section" id="tts-429-section" style="display:none">
+        <h3>429 Inference Config</h3>
+
+        <div class="form-row">
+          <label>API Key</label>
+          <input type="password" id="tts-apikey429" placeholder="Paste your 429 API key" autocomplete="off" />
+        </div>
+
+        <div class="form-row">
+          <label>Reference Voice</label>
+          <input type="text" id="tts-voiceref429" placeholder="/absolute/path/to/voice.wav" style="flex:1;min-width:0" />
+        </div>
+        <div class="config-note" style="margin-top:-6px">
+          Absolute path to a WAV file on this machine used as the cloning reference.
+          The file is read at synthesis time and sent with each request.
+        </div>
+      </div>
+
+      <!-- Local clone config (shown only when provider = local) -->
+      <div class="section" id="tts-local-section" style="display:none">
         <h3>Voice Source</h3>
 
         <div class="form-row">
@@ -525,7 +582,6 @@
           </div>
         </div>
 
-        <!-- Reading prompts shown during recording -->
         <div id="reading-prompts">
           <h4>Read these aloud at a natural pace — aim for 20–30 seconds total</h4>
           <div id="prompt-lines"></div>
@@ -538,22 +594,16 @@
             <button class="btn ghost" id="upload-source-btn">Upload Source</button>
           </div>
         </div>
-      </div>
 
-      <div class="section">
-        <h3>Saved Voices</h3>
+        <h3 style="margin-top:20px">Saved Voices</h3>
         <ul class="voice-list" id="voice-list">
           <li style="color:var(--text-muted);font-size:0.85rem">Loading...</li>
         </ul>
 
-        <div class="config-note">
-          <strong>To hear your cloned voice:</strong>
-          <ol>
-            <li>Set <code>TTS_PROVIDER=coqui</code> in your <code>.env</code> file</li>
-            <li>Run <code>./scripts/install.sh</code> and opt into voice cloning if <code>tts/.venv</code> is missing</li>
-            <li>Restart Jennifer with <code>./scripts/deploy-locally.sh</code>; it starts the embedded XTTS v2 service automatically</li>
-          </ol>
-          Check <code>tts/server.log</code> if startup falls back to system TTS.
+        <div class="config-note" style="margin-top:14px">
+          <strong>Setup:</strong> Run <code>./scripts/install.sh</code> and opt into voice cloning,
+          then restart with <code>./scripts/deploy-locally.sh</code>.
+          Check <code>tts/server.log</code> if it falls back to system TTS.
         </div>
       </div>
 

@@ -15,6 +15,7 @@ function readIntEnv(name, fallback) {
 
 const config = {
   apiKey: process.env['429-API-KEY'],
+  apiVoiceKey429: process.env['429-API-VOICE-KEY'] || '',
   apiBaseUrl: process.env.API_BASE_URL || 'https://api.429inference.com',
   apiModel: process.env.API_MODEL || 'gpt-oss',
   apiMaxTokens: readIntEnv('API_MAX_TOKENS', 8192),

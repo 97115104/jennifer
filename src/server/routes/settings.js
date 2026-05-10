@@ -180,7 +180,15 @@ function createSettingsRouter() {
     }
     res.json({
       app:    s.app,
-      tts:    s.tts,
+      tts: {
+        provider:      s.tts.provider,
+        activeVoice:   s.tts.activeVoice,
+        speed:         s.tts.speed,
+        autoSpeak:     s.tts.autoSpeak,
+        hasApiKey429:  !!(s.tts.apiKey429),
+        hasVoiceRef429: !!(s.tts.voiceRef429 && fs.existsSync(s.tts.voiceRef429)),
+        voiceRef429Label: s.tts.voiceRef429 ? path.basename(s.tts.voiceRef429) : null,
+      },
       google: { connected: s.google.connected, email: s.google.email, name: s.google.name },
       github: { connected: s.github.connected, username: s.github.username, name: s.github.name },
       voices: listVoices(),
@@ -285,6 +293,67 @@ function createSettingsRouter() {
     if (!name || !fs.existsSync(voicePath)) return res.status(404).json({ error: 'Voice not found' });
 
     res.download(voicePath, `${name}.wav`);
+  });
+
+  // POST /api/settings/tts — save TTS settings
+  router.post('/tts', (req, res) => {
+    const VALID_PROVIDERS = ['system', 'local', '429'];
+    const MASK = '***';
+    const { provider, apiKey429, voiceRef429, speed, autoSpeak } = req.body || {};
+
+    const patch = {};
+    if (provider !== undefined && VALID_PROVIDERS.includes(provider)) patch.provider = provider;
+    if (apiKey429 !== undefined && apiKey429 !== MASK) patch.apiKey429 = String(apiKey429).trim();
+    if (voiceRef429 !== undefined) patch.voiceRef429 = String(voiceRef429).trim();
+    if (speed !== undefined) patch.speed = Math.min(2.0, Math.max(0.5, parseFloat(speed) || 1.0));
+    if (autoSpeak !== undefined) patch.autoSpeak = Boolean(autoSpeak);
+
+    getSettings().set('tts', patch);
+    res.json({ ok: true });
+  });
+
+  // GET /api/settings/tts/health — check TTS provider connectivity
+  router.get('/tts/health', async (req, res) => {
+    const tts = getSettings().get('tts') || {};
+    const provider = tts.provider || 'system';
+
+    if (provider === 'system') {
+      const { execFile } = require('child_process');
+      const bin = process.platform === 'darwin' ? 'say' : 'espeak-ng';
+      execFile(bin, ['--version'], (err) => {
+        res.json({ ok: !err, provider, detail: err ? `${bin} not found` : `${bin} available` });
+      });
+      return;
+    }
+
+    if (provider === 'local') {
+      try {
+        const r = await axios.get('http://localhost:5123/api/health', { timeout: 4000 });
+        res.json({ ok: true, provider, detail: `XTTS ready, device: ${r.data.device || 'unknown'}` });
+      } catch (err) {
+        res.json({ ok: false, provider, detail: err.message });
+      }
+      return;
+    }
+
+    if (provider === '429') {
+      if (!tts.apiKey429) {
+        return res.json({ ok: false, provider, detail: 'API key not configured' });
+      }
+      try {
+        const r = await axios.get('https://api.429inference.com/v1/models', {
+          headers: { Authorization: `Bearer ${tts.apiKey429}` },
+          timeout: 6000,
+        });
+        const hasTTS = (r.data?.data || []).some(m => m.id === 'chatterbox-turbo' || (m.id || '').startsWith('tts'));
+        res.json({ ok: true, provider, detail: hasTTS ? 'TTS model available' : 'Connected (TTS model not listed yet)' });
+      } catch (err) {
+        res.json({ ok: false, provider, detail: err.response?.data?.error?.message || err.message });
+      }
+      return;
+    }
+
+    res.json({ ok: false, provider, detail: 'Unknown provider' });
   });
 
   // DELETE /api/settings/voices/:name — delete a voice sample

@@ -153,6 +153,8 @@ class JenniferApp {
       progress: 0,
       timer: null,
     };
+    this.autoSpeak = true;
+    this._lastAssistantEl = null;
   }
 
   async init() {
@@ -168,6 +170,7 @@ class JenniferApp {
       const data = await res.json();
       this._setAssistantName(data.app?.name || 'Jennifer');
       this._updateModelInfo(data.inference || {});
+      this.autoSpeak = data.tts?.autoSpeak !== false;
     } catch (err) {
       console.warn('[jennifer] Settings load failed:', err.message);
       this._setAssistantName('Jennifer');
@@ -298,9 +301,55 @@ class JenniferApp {
     const el = document.getElementById('transcript');
     const div = document.createElement('div');
     div.className = `message ${role}`;
-    div.textContent = text;
+
+    const textSpan = document.createElement('span');
+    textSpan.textContent = text;
+    div.appendChild(textSpan);
+
+    if (role === 'assistant') {
+      const btn = document.createElement('button');
+      btn.className = 'speak-btn';
+      btn.title = 'Speak this response';
+      btn.textContent = '▶';
+      btn.style.display = 'none';
+      btn.addEventListener('click', () => this._speakMessage(div, btn));
+      div.appendChild(btn);
+      this._lastAssistantEl = div;
+    }
+
     el.appendChild(div);
     container.scrollTop = container.scrollHeight;
+    return div;
+  }
+
+  _speakMessage(el, btn) {
+    const { _audioData: data, _audioMimeType: mimeType } = el;
+    if (!data) return;
+    if (el._audioPlaying) {
+      el._audioPlaying.pause();
+      el._audioPlaying = null;
+      btn.textContent = '▶';
+      return;
+    }
+    const bytes = atob(data);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    const blob = new Blob([arr], { type: mimeType || 'audio/mpeg' });
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    el._audioPlaying = audio;
+    btn.textContent = '⏹';
+    audio.onended = () => {
+      URL.revokeObjectURL(url);
+      el._audioPlaying = null;
+      btn.textContent = '▶';
+    };
+    audio.onerror = () => {
+      URL.revokeObjectURL(url);
+      el._audioPlaying = null;
+      btn.textContent = '▶';
+    };
+    audio.play().catch(() => { btn.textContent = '▶'; });
   }
 
   _addNote(text) {
@@ -817,16 +866,30 @@ class JenniferApp {
         break;
 
       case 'audio':
-        this._setState('speaking');
-        this.isSpeaking = true;
-        this._stopWakeWord();
-        this._completeTTSProgress('Playing cloned speech');
-        this._playAudio(msg.data, msg.mimeType).then(() => {
-          this._hideTTSProgress(400);
-          this.isSpeaking = false;
+        if (this.autoSpeak) {
+          this._setState('speaking');
+          this.isSpeaking = true;
+          this._stopWakeWord();
+          this._completeTTSProgress('Playing cloned speech');
+          this._playAudio(msg.data, msg.mimeType).then(() => {
+            this._hideTTSProgress(400);
+            this.isSpeaking = false;
+            this._setState('listening');
+            this._startWakeWord();
+          });
+        } else {
+          // Store audio on the last assistant message; show its speak button
+          const el = this._lastAssistantEl;
+          if (el) {
+            el._audioData = msg.data;
+            el._audioMimeType = msg.mimeType;
+            const btn = el.querySelector('.speak-btn');
+            if (btn) btn.style.display = '';
+          }
+          this._hideTTSProgress(200);
           this._setState('listening');
           this._startWakeWord();
-        });
+        }
         break;
 
       case 'error':
