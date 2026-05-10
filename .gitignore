@@ -16,3 +16,5 @@ tts/.venv/
 tts/server.log
 
 .DS_Store
+
+.nvmrc

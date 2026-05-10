@@ -40,9 +40,12 @@ if ! command -v node &>/dev/null; then
   exit 1
 fi
 
+NODE_VERSION=$(node -e "console.log(process.versions.node)")
 NODE_MAJOR=$(node -e "console.log(process.versions.node.split('.')[0])")
-if [ "$NODE_MAJOR" -lt 18 ]; then
-  echo "❌  Node.js v18+ required (found v$(node --version))"
+NODE_MINOR=$(node -e "console.log(process.versions.node.split('.')[1])")
+if [ "$NODE_MAJOR" -lt 22 ] || { [ "$NODE_MAJOR" -eq 22 ] && [ "$NODE_MINOR" -lt 5 ]; }; then
+  echo "❌  Node.js v22.5+ required (found v${NODE_VERSION})"
+  echo "   Install via: nvm install 22 && nvm use 22"
   exit 1
 fi
 

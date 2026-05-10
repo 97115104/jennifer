@@ -44,10 +44,10 @@ class Settings {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      const migrate = this._db.transaction(() => {
+      this._db.exec('BEGIN');
+      try {
         for (const [key, value] of Object.entries(raw)) {
           if (key === 'memory') {
-            // Migrate memory entries to their own table
             for (const entry of (value.entries || [])) {
               try {
                 insertMemory.run(
@@ -62,8 +62,11 @@ class Settings {
             insert.run(key, JSON.stringify(value));
           }
         }
-      });
-      migrate();
+        this._db.exec('COMMIT');
+      } catch (txErr) {
+        this._db.exec('ROLLBACK');
+        throw txErr;
+      }
       console.log('[settings] Migrated from settings.json');
     } catch (err) {
       console.warn('[settings] JSON migration failed:', err.message);

@@ -13,10 +13,10 @@ function getDb() {
 
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-  const Database = require('better-sqlite3');
-  _db = new Database(DB_PATH);
-  _db.pragma('journal_mode = WAL');
-  _db.pragma('foreign_keys = ON');
+  const { DatabaseSync } = require('node:sqlite');
+  _db = new DatabaseSync(DB_PATH);
+  _db.exec('PRAGMA journal_mode = WAL');
+  _db.exec('PRAGMA foreign_keys = ON');
 
   _db.exec(`
     CREATE TABLE IF NOT EXISTS settings (
