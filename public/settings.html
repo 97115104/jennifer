@@ -377,6 +377,53 @@
       margin-left: 6px;
       vertical-align: middle;
     }
+
+    @media (max-width: 600px) {
+      body { padding: 16px 12px; }
+
+      /* Tabs: shrink padding + horizontal scroll so they never wrap */
+      .tabs { overflow-x: auto; gap: 0; padding-bottom: 1px; -webkit-overflow-scrolling: touch; }
+      .tab-btn { padding: 10px 13px; font-size: 0.82rem; white-space: nowrap; flex-shrink: 0; }
+
+      .section { padding: 14px 12px; }
+
+      /* Form rows: stack label above field/button */
+      .form-row { flex-direction: column; align-items: stretch; gap: 8px; }
+      .form-row label { min-width: unset; }
+      .form-row > .btn { width: 100%; justify-content: center; text-align: center; }
+
+      /* Allow buttons that sit inline (record, stop) to stay side-by-side */
+      .form-row.inline-btns { flex-direction: row; flex-wrap: wrap; align-items: center; }
+      .form-row.inline-btns > .btn { width: auto; }
+
+      /* Inputs fill the column */
+      input[type="text"],
+      input[type="password"],
+      select { min-width: 0; width: 100%; box-sizing: border-box; }
+      input[type="file"] { min-width: 0; width: 100%; }
+
+      /* Voice list items: name on top, buttons wrap below */
+      .voice-item { flex-wrap: wrap; gap: 8px; padding: 10px; }
+      .voice-item .voice-name { width: 100%; }
+      .voice-item .btn,
+      .voice-item a.btn { flex: 1; min-width: 0; text-align: center; font-size: 0.75rem; padding: 6px 8px; }
+
+      /* Pricing table: horizontal scroll */
+      .pricing-table-inner { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .pricing-table-inner table { min-width: 340px; }
+
+      /* Model select row — keep select + refresh button on one line */
+      .form-row.model-row { flex-direction: row; }
+      .form-row.model-row .inf-select { flex: 1; min-width: 0; }
+      .form-row.model-row .btn { width: auto; flex-shrink: 0; }
+
+      /* Toast: full width at bottom */
+      .toast { right: 12px; left: 12px; bottom: 16px; }
+
+      /* Page header: tighter */
+      .page-header { margin-bottom: 16px; gap: 10px; }
+      .page-header h2 { font-size: 1.25rem; }
+    }
   </style>
 </head>
 <body>
@@ -499,7 +546,7 @@
         </div>
 
         <!-- ── Model selector ── -->
-        <div class="form-row" style="margin-top:14px">
+        <div class="form-row model-row" style="margin-top:14px">
           <label>Model</label>
           <select id="inf-model-select" class="inf-select">
             <option value="">Save API key to load models…</option>
@@ -540,7 +587,7 @@
           </label>
         </div>
 
-        <div class="form-row" style="margin-top:14px">
+        <div class="form-row inline-btns" style="margin-top:14px">
           <button class="btn primary" id="save-tts-btn">Save</button>
           <button class="btn ghost" id="test-tts-btn" style="margin-left:8px">Test</button>
           <span id="tts-save-result" style="font-size:0.85rem;color:var(--text-muted);margin-left:10px"></span>
@@ -579,7 +626,7 @@
           <input type="text" id="voice-name" placeholder="e.g. steve" maxlength="40" />
         </div>
 
-        <div class="form-row">
+        <div class="form-row inline-btns">
           <button class="btn primary" id="record-start-btn">&#9679; Start Recording</button>
           <button class="btn secondary" id="record-stop-btn" style="display:none">&#9632; Stop &amp; Save</button>
           <div class="recording-indicator" id="rec-indicator">
@@ -595,9 +642,9 @@
 
         <div class="config-note">
           <strong>Or upload an existing source file:</strong>
-          <div class="form-row" style="margin:10px 0 0">
-            <input type="file" id="voice-file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.webm,.flac" />
-            <button class="btn ghost" id="upload-source-btn">Upload Source</button>
+          <div class="form-row inline-btns" style="margin:10px 0 0">
+            <input type="file" id="voice-file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.webm,.flac" style="flex:1;min-width:0" />
+            <button class="btn ghost" id="upload-source-btn" style="flex-shrink:0">Upload Source</button>
           </div>
         </div>
 
