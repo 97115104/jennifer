@@ -77,7 +77,9 @@
       color: var(--text-muted);
       min-width: 60px;
     }
-    input[type="text"] {
+    input[type="text"],
+    input[type="password"],
+    select {
       flex: 1;
       background: var(--bg);
       border: 1px solid var(--border);
@@ -87,8 +89,13 @@
       font-size: 0.875rem;
       outline: none;
       min-width: 180px;
+      appearance: none;
+      -webkit-appearance: none;
     }
-    input[type="text"]:focus { border-color: var(--accent); }
+    input[type="text"]:focus,
+    input[type="password"]:focus,
+    select:focus { border-color: var(--accent); }
+    select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7794' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; cursor: pointer; }
     input[type="file"] {
       flex: 1;
       min-width: 220px;
@@ -548,24 +555,23 @@
       <!-- 429 provider config (shown only when provider = 429) -->
       <div class="section" id="tts-429-section" style="display:none">
         <h3>429 Inference Config</h3>
-
         <div class="form-row">
           <label>API Key</label>
           <input type="password" id="tts-apikey429" placeholder="Paste your 429 API key" autocomplete="off" />
         </div>
+      </div>
 
-        <div class="form-row">
-          <label>Reference Voice</label>
-          <input type="text" id="tts-voiceref429" placeholder="/absolute/path/to/voice.wav" style="flex:1;min-width:0" />
-        </div>
-        <div class="config-note" style="margin-top:-6px">
-          Absolute path to a WAV file on this machine used as the cloning reference.
-          The file is read at synthesis time and sent with each request.
+      <!-- Local clone setup note (shown only when provider = local) -->
+      <div class="section" id="tts-local-section" style="display:none">
+        <div class="config-note">
+          <strong>Setup:</strong> Run <code>./scripts/install.sh</code> and opt into voice cloning,
+          then restart with <code>./scripts/deploy-locally.sh</code>.
+          Check <code>tts/server.log</code> if it falls back to system TTS.
         </div>
       </div>
 
-      <!-- Local clone config (shown only when provider = local) -->
-      <div class="section" id="tts-local-section" style="display:none">
+      <!-- Shared voice recording/upload/list (shown for local + 429) -->
+      <div class="section" id="tts-voice-section" style="display:none">
         <h3>Voice Source</h3>
 
         <div class="form-row">
@@ -599,12 +605,6 @@
         <ul class="voice-list" id="voice-list">
           <li style="color:var(--text-muted);font-size:0.85rem">Loading...</li>
         </ul>
-
-        <div class="config-note" style="margin-top:14px">
-          <strong>Setup:</strong> Run <code>./scripts/install.sh</code> and opt into voice cloning,
-          then restart with <code>./scripts/deploy-locally.sh</code>.
-          Check <code>tts/server.log</code> if it falls back to system TTS.
-        </div>
       </div>
 
     </div>

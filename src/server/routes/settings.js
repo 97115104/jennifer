@@ -119,7 +119,7 @@ async function _fetchModelsForProvider(provider, inf) {
   return { models: [], error: 'Unknown provider' };
 }
 
-function createSettingsRouter() {
+function createSettingsRouter(ttsProvider) {
   const router = express.Router();
   const upload = multer({
     storage: multer.memoryStorage(),
@@ -272,6 +272,20 @@ function createSettingsRouter() {
     }
   });
 
+  // POST /api/settings/voices/ref429 — set 429 reference voice by saved name
+  router.post('/voices/ref429', (req, res) => {
+    const name = sanitizeVoiceName(req.body.name);
+    if (!name) {
+      getSettings().set('tts', { voiceRef429: '' });
+      return res.json({ ok: true, voiceRef429: null });
+    }
+    const voicePath = path.join(VOICES_DIR, `${name}.wav`);
+    if (!fs.existsSync(voicePath)) return res.status(404).json({ error: 'Voice not found' });
+    getSettings().set('tts', { voiceRef429: voicePath });
+    console.log(`[settings/voices] ref429 set to: ${voicePath}`);
+    res.json({ ok: true, voiceRef429: voicePath });
+  });
+
   // POST /api/settings/voices/active — set active voice
   router.post('/voices/active', (req, res) => {
     const name = sanitizeVoiceName(req.body.name);
@@ -354,6 +368,29 @@ function createSettingsRouter() {
     }
 
     res.json({ ok: false, provider, detail: 'Unknown provider' });
+  });
+
+  // POST /api/settings/tts/test — synthesize "This is a test." with specified or saved provider
+  router.post('/tts/test', async (req, res) => {
+    if (!ttsProvider) return res.status(503).json({ error: 'TTS provider not available' });
+
+    // Use the provider the UI currently shows, not what's saved (allows testing before saving)
+    const reqProvider = req.body?.provider;
+    const impl = reqProvider && ttsProvider._providers
+      ? (ttsProvider._providers[reqProvider] || ttsProvider._providers.system)
+      : ttsProvider;
+
+    const tmpPath = path.join(os.tmpdir(), `tts_test_${Date.now()}.mp3`);
+    try {
+      await impl.synthesize('This is a test.', tmpPath);
+      const audio = fs.readFileSync(tmpPath).toString('base64');
+      res.json({ ok: true, audio, mimeType: 'audio/mpeg' });
+    } catch (err) {
+      console.error('[settings/tts/test]', err.message);
+      res.status(500).json({ ok: false, error: err.message });
+    } finally {
+      fs.unlink(tmpPath, () => {});
+    }
   });
 
   // DELETE /api/settings/voices/:name — delete a voice sample

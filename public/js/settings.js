@@ -34,6 +34,8 @@ document.addEventListener('click', e => {
   const name = btn.dataset.name;
   if (action === 'set-voice') setActiveVoice(name || null);
   else if (action === 'deactivate-voice') setActiveVoice(null);
+  else if (action === 'set-voice-ref429') setVoiceRef429(name || null);
+  else if (action === 'deactivate-voice-ref429') setVoiceRef429(null);
   else if (action === 'delete-voice') deleteVoice(name);
   else if (action === 'disconnect-google') disconnectGoogle();
   else if (action === 'disconnect-github') disconnectGitHub();
@@ -483,6 +485,7 @@ async function saveVoiceBlob(name, blob, filename) {
 function _showTTSSection(provider) {
   document.getElementById('tts-429-section').style.display   = provider === '429'   ? '' : 'none';
   document.getElementById('tts-local-section').style.display = provider === 'local' ? '' : 'none';
+  document.getElementById('tts-voice-section').style.display = (provider === 'local' || provider === '429') ? '' : 'none';
 }
 
 function renderTTS(tts = {}) {
@@ -501,14 +504,12 @@ function renderTTS(tts = {}) {
   const keyField = document.getElementById('tts-apikey429');
   if (keyField) { keyField.value = tts.hasApiKey429 ? '***' : ''; }
 
-  const refField = document.getElementById('tts-voiceref429');
-  if (refField) { refField.value = tts.voiceRef429Label || ''; }
-
   _showTTSSection(provider);
 }
 
 document.getElementById('tts-provider-select')?.addEventListener('change', e => {
   _showTTSSection(e.target.value);
+  renderVoices(settings.voices || [], settings.tts || {});
 });
 
 document.getElementById('tts-speed')?.addEventListener('input', e => {
@@ -529,9 +530,6 @@ document.getElementById('save-tts-btn')?.addEventListener('click', async () => {
   const keyVal = document.getElementById('tts-apikey429')?.value.trim() || '';
   if (keyVal && keyVal !== MASK) body.apiKey429 = keyVal;
 
-  const refVal = document.getElementById('tts-voiceref429')?.value.trim() || '';
-  if (refVal) body.voiceRef429 = refVal;
-
   try {
     const res = await fetch('/api/settings/tts', {
       method: 'POST',
@@ -550,48 +548,85 @@ document.getElementById('save-tts-btn')?.addEventListener('click', async () => {
 });
 
 document.getElementById('test-tts-btn')?.addEventListener('click', async () => {
+  const btn      = document.getElementById('test-tts-btn');
   const resultEl = document.getElementById('tts-save-result');
-  const healthIcon = document.getElementById('tts-health-icon');
+  const healthIcon   = document.getElementById('tts-health-icon');
   const healthDetail = document.getElementById('tts-health-detail');
-  const healthRow = document.getElementById('tts-health-row');
+  const healthRow    = document.getElementById('tts-health-row');
 
-  if (resultEl) resultEl.textContent = 'Checking…';
+  btn.disabled = true;
+  btn.textContent = 'Testing…';
+  if (resultEl) resultEl.textContent = '';
   if (healthRow) healthRow.style.display = 'none';
 
   try {
-    const res = await fetch('/api/settings/tts/health');
+    const selectedProvider = document.getElementById('tts-provider-select')?.value || 'system';
+    const res  = await fetch('/api/settings/tts/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: selectedProvider }),
+    });
     const data = await res.json();
 
     if (healthRow) healthRow.style.display = '';
-    if (healthIcon) healthIcon.textContent = data.ok ? '✓ ' : '✗ ';
-    if (healthIcon) healthIcon.style.color = data.ok ? 'var(--success, #4caf50)' : 'var(--error, #e74c3c)';
-    if (healthDetail) healthDetail.textContent = data.detail || '';
-    if (resultEl) resultEl.textContent = '';
 
-    if (data.ok) showToast('TTS provider is reachable', 'success');
-    else showToast(`TTS check failed: ${data.detail}`, 'error');
+    if (data.ok && data.audio) {
+      if (healthIcon)  { healthIcon.textContent = '✓ '; healthIcon.style.color = 'var(--success, #4caf50)'; }
+      if (healthDetail) healthDetail.textContent = 'Playing "This is a test."…';
+
+      // Play the synthesized audio
+      const bytes = atob(data.audio);
+      const arr   = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+      const blob  = new Blob([arr], { type: data.mimeType || 'audio/mpeg' });
+      const url   = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        if (healthDetail) healthDetail.textContent = 'Synthesis OK';
+      };
+      audio.play().catch(() => {});
+    } else {
+      if (healthIcon)  { healthIcon.textContent = '✗ '; healthIcon.style.color = 'var(--error, #e74c3c)'; }
+      if (healthDetail) healthDetail.textContent = data.error || 'Synthesis failed';
+      showToast(`TTS test failed: ${data.error || 'unknown error'}`, 'error');
+    }
   } catch (err) {
-    if (resultEl) resultEl.textContent = err.message;
-    showToast('Health check failed: ' + err.message, 'error');
+    if (healthRow) healthRow.style.display = '';
+    if (healthIcon)  { healthIcon.textContent = '✗ '; healthIcon.style.color = 'var(--error, #e74c3c)'; }
+    if (healthDetail) healthDetail.textContent = err.message;
+    showToast('TTS test failed: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Test';
   }
 });
 
 function renderVoices(voices = [], tts = {}) {
   const list = document.getElementById('voice-list');
+  if (!list) return;
+
+  const provider = document.getElementById('tts-provider-select')?.value || 'local';
+  const is429 = provider === '429';
+
   if (!voices.length) {
     list.innerHTML = '<li style="color:var(--text-muted);font-size:0.85rem;padding:4px 0">No voices saved yet — record one above.</li>';
     return;
   }
 
   list.innerHTML = voices.map(v => {
-    const isActive = tts.activeVoice && tts.activeVoice.includes(`${v.name}.wav`);
+    const isActive = is429
+      ? (tts.voiceRef429Label || '') === `${v.name}.wav`
+      : (tts.activeVoice || '').includes(`${v.name}.wav`);
+    const setAction        = is429 ? 'set-voice-ref429'   : 'set-voice';
+    const deactivateAction = is429 ? 'deactivate-voice-ref429' : 'deactivate-voice';
     return `
       <li class="voice-item" data-name="${v.name}">
         <span class="voice-name">${v.name}</span>
         ${isActive ? '<span class="active-tag">Active</span>' : ''}
         ${!isActive
-          ? `<button class="btn ghost" style="padding:5px 12px;font-size:0.8rem" data-action="set-voice" data-name="${v.name}">Use</button>`
-          : `<button class="btn ghost" style="padding:5px 12px;font-size:0.8rem" data-action="deactivate-voice">Deactivate</button>`
+          ? `<button class="btn ghost" style="padding:5px 12px;font-size:0.8rem" data-action="${setAction}" data-name="${v.name}">Use</button>`
+          : `<button class="btn ghost" style="padding:5px 12px;font-size:0.8rem" data-action="${deactivateAction}">Deactivate</button>`
         }
         <a class="btn ghost" style="padding:5px 12px;font-size:0.8rem;text-decoration:none" href="/api/settings/voices/${encodeURIComponent(v.name)}/download">Download</a>
         <button class="btn danger" style="padding:5px 12px;font-size:0.8rem" data-action="delete-voice" data-name="${v.name}">Delete</button>
@@ -607,6 +642,18 @@ async function setActiveVoice(name) {
   });
   if (res.ok) {
     showToast(name ? `"${name}" set as active voice` : 'Voice deactivated', 'success');
+    await loadSettings();
+  }
+}
+
+async function setVoiceRef429(name) {
+  const res = await fetch('/api/settings/voices/ref429', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (res.ok) {
+    showToast(name ? `"${name}" set as 429 reference voice` : '429 reference voice cleared', 'success');
     await loadSettings();
   }
 }

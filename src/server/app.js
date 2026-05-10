@@ -72,7 +72,7 @@ function createApp(assistant) {
   app.use('/auth', createAuthRouter(config));
 
   // Settings API
-  app.use('/api/settings', createSettingsRouter());
+  app.use('/api/settings', createSettingsRouter(assistant.tts));
   app.use('/api/memory', createMemoryRouter());
   app.use('/api/history', createHistoryRouter());
 

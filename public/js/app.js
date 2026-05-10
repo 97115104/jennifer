@@ -169,7 +169,7 @@ class JenniferApp {
       const res = await fetch('/api/settings');
       const data = await res.json();
       this._setAssistantName(data.app?.name || 'Jennifer');
-      this._updateModelInfo(data.inference || {});
+      this._updateModelInfo(data.inference || {}, data.tts || {});
       this.autoSpeak = data.tts?.autoSpeak !== false;
     } catch (err) {
       console.warn('[jennifer] Settings load failed:', err.message);
@@ -177,7 +177,7 @@ class JenniferApp {
     }
   }
 
-  _updateModelInfo(inf) {
+  _updateModelInfo(inf, tts = {}) {
     const el = document.getElementById('model-info');
     if (!el) return;
     const LABELS = {
@@ -212,7 +212,16 @@ class JenniferApp {
       const c = (500 * p.i + 200 * p.o) / 1_000_000;
       costStr = ` · ~$${c < 0.001 ? c.toFixed(4) : c.toFixed(3)}/req`;
     }
-    el.textContent = provider && model ? `${label} · ${model}${costStr}` : (label || '');
+    const TTS_LABELS = { system: 'System TTS', local: 'Local Clone', '429': '429 Voice' };
+    const ttsProvider = tts.provider || 'system';
+    const ttsLabel    = TTS_LABELS[ttsProvider] || ttsProvider;
+    const voiceName   = ttsProvider === '429'
+      ? (tts.voiceRef429Label ? tts.voiceRef429Label.replace('.wav', '') : null)
+      : (tts.activeVoice ? tts.activeVoice.split('/').pop().replace('.wav', '') : null);
+    const ttsStr = voiceName ? `${ttsLabel} · ${voiceName}` : ttsLabel;
+
+    const modelPart = provider && model ? `${label} · ${model}${costStr}` : (label || '');
+    el.textContent = modelPart ? `${modelPart} | ${ttsStr}` : ttsStr;
   }
 
   _setAssistantName(name) {
