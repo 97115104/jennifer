@@ -1,24 +1,18 @@
 'use strict';
 
-const { execFile } = require('child_process');
 const https = require('https');
 const http = require('http');
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
-const { promisify } = require('util');
 const TTSProvider = require('./TTSProvider');
 const { getInstance: getSettings } = require('../core/Settings');
 const { DEFAULT_429_VOICE_NAME, resolve429VoicePath } = require('./default429Voice');
 
-const TTS_ENDPOINT = 'https://api.429inference.com/v1/tts/synthesize';
-const DEFAULT_MAX_CHARS_PER_REQUEST = 1800;
+const SHORT_TTS_CHAR_LIMIT = 2000;
 const DEFAULT_MAX_RETRIES = 3;
-const execFileAsync = promisify(execFile);
 
-function readMaxCharsPerRequest() {
-  const value = parseInt(process.env.TTS_429_MAX_CHARS || '', 10);
-  return Number.isFinite(value) && value > 0 ? value : DEFAULT_MAX_CHARS_PER_REQUEST;
+function get429BaseUrl() {
+  return (process.env.API_BASE_URL || 'https://api.429inference.com').replace(/\/$/, '');
 }
 
 function readMaxRetries() {
@@ -38,132 +32,86 @@ function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function splitOversizedText(text, maxChars) {
-  const words = String(text || '').trim().split(/\s+/).filter(Boolean);
-  const parts = [];
-  let current = '';
-
-  for (const word of words) {
-    if (word.length > maxChars) {
-      if (current) {
-        parts.push(current);
-        current = '';
-      }
-      for (let i = 0; i < word.length; i += maxChars) {
-        parts.push(word.slice(i, i + maxChars));
-      }
-      continue;
-    }
-
-    const next = current ? `${current} ${word}` : word;
-    if (next.length > maxChars) {
-      parts.push(current);
-      current = word;
-    } else {
-      current = next;
-    }
-  }
-
-  if (current) parts.push(current);
-  return parts;
-}
-
-function splitTextFor429TTS(text, maxChars = readMaxCharsPerRequest()) {
-  const normalized = String(text || '').trim();
-  if (!normalized) return [];
-
-  const chunks = [];
-  let current = '';
-
-  const appendChunk = (piece, separator = '\n\n') => {
-    const clean = String(piece || '').trim();
-    if (!clean) return;
-
-    if (!current) {
-      current = clean;
-      return;
-    }
-
-    const next = `${current}${separator}${clean}`;
-    if (next.length <= maxChars) {
-      current = next;
-      return;
-    }
-
-    chunks.push(current);
-    current = clean;
-  };
-
-  const appendLongParagraph = (paragraph) => {
-    const sentences = paragraph.match(/[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g) || [paragraph];
-    for (const sentence of sentences) {
-      if (sentence.length <= maxChars) {
-        appendChunk(sentence, ' ');
-      } else {
-        for (const part of splitOversizedText(sentence, maxChars)) appendChunk(part, ' ');
-      }
-    }
-  };
-
-  for (const paragraph of normalized.split(/\n\s*\n+/)) {
-    if (paragraph.length <= maxChars) appendChunk(paragraph);
-    else appendLongParagraph(paragraph);
-  }
-
-  if (current) chunks.push(current);
-  return chunks;
-}
-
-function escapeConcatPath(filePath) {
-  return filePath.replace(/'/g, "'\\''");
-}
-
 class Remote429TTSProvider extends TTSProvider {
+  constructor(config = {}) {
+    super(config);
+    this._voiceId = null;
+    this._voiceIdPath = '';
+    this._voiceIdSignature = '';
+  }
+
   async synthesize(text, outputPath) {
     const tts = getSettings().get('tts');
     const { apiKey429, voiceRef429 } = tts || {};
     const voicePath = resolve429VoicePath(voiceRef429);
+    const cleanText = String(text || '').trim();
 
     if (!apiKey429) throw new Error('429 TTS API key is not configured');
-    if (!voicePath) throw new Error(`429 TTS needs a saved voice source. Record or upload one in Settings, then click Use. The default "${DEFAULT_429_VOICE_NAME}" voice is missing.`);
+    if (!voicePath) {
+      throw new Error(
+        `429 TTS needs a saved voice source. Record or upload one in Settings, then click Use. ` +
+        `The default "${DEFAULT_429_VOICE_NAME}" voice is missing.`
+      );
+    }
+    if (!cleanText) throw new Error('429 TTS needs text to synthesize');
 
-    const chunks = splitTextFor429TTS(text);
-    if (!chunks.length) throw new Error('429 TTS needs text to synthesize');
+    const voiceId = await this._ensureVoiceUploaded(apiKey429, voicePath);
 
-    if (chunks.length === 1) {
-      await this._synthesizeSingleWithRetries(chunks[0], outputPath, apiKey429, voicePath, 1, 1);
-      return outputPath;
+    if (cleanText.length <= SHORT_TTS_CHAR_LIMIT) {
+      return this._synthesizeShortWithRetries(cleanText, outputPath, apiKey429, voiceId);
     }
 
-    console.log(`[tts:429] Synthesizing ${text.length} chars in ${chunks.length} chunks`);
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jennifer-429-tts-'));
-    const chunkFiles = [];
-    try {
-      for (let i = 0; i < chunks.length; i += 1) {
-        const chunkPath = path.join(tmpDir, `chunk-${String(i).padStart(3, '0')}.mp3`);
-        await this._synthesizeSingleWithRetries(chunks[i], chunkPath, apiKey429, voicePath, i + 1, chunks.length);
-        chunkFiles.push(chunkPath);
-      }
-      await this._concatAudioFiles(chunkFiles, outputPath, tmpDir);
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-
-    return outputPath;
+    return this._synthesizeLong(cleanText, outputPath, apiKey429, voiceId);
   }
 
-  async _synthesizeSingleWithRetries(text, outputPath, apiKey429, voicePath, chunkNumber, chunkCount) {
+  async _ensureVoiceUploaded(apiKey, voicePath) {
+    const stat = fs.statSync(voicePath);
+    const signature = `${stat.size}:${stat.mtimeMs}`;
+    if (this._voiceId && this._voiceIdPath === voicePath && this._voiceIdSignature === signature) {
+      return this._voiceId;
+    }
+
+    const voiceBase64 = 'data:audio/wav;base64,' + fs.readFileSync(voicePath).toString('base64');
+    const res = await this._apiRequest('POST', '/v1/tts/voices', apiKey, {
+      voice: voiceBase64,
+      name: path.basename(voicePath, '.wav'),
+    });
+    if (!res.voice_id) throw new Error('Voice upload failed: no voice_id returned');
+
+    this._voiceId = res.voice_id;
+    this._voiceIdPath = voicePath;
+    this._voiceIdSignature = signature;
+    return this._voiceId;
+  }
+
+  async _apiRequest(method, endpoint, apiKey, body) {
+    const res = await fetch(`${get429BaseUrl()}${endpoint}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw make429ApiError(`429 API ${method} ${endpoint} -> HTTP ${res.status}: ${txt}`, res.status);
+    }
+    return res.json();
+  }
+
+  async _synthesizeShortWithRetries(text, outputPath, apiKey, voiceId) {
     const maxRetries = readMaxRetries();
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
       try {
-        return await this._synthesizeSingle(text, outputPath, apiKey429, voicePath);
+        return await this._synthesizeShort(text, outputPath, apiKey, voiceId);
       } catch (err) {
         const shouldRetry = err.retryable === true && attempt < maxRetries;
         if (!shouldRetry) throw err;
 
         const retryDelayMs = Math.min(1000 * 2 ** attempt, 8000);
         console.warn(
-          `[tts:429] chunk ${chunkNumber}/${chunkCount} failed (${err.message}); ` +
+          `[tts:429] short synthesis failed (${err.message}); ` +
           `retrying in ${retryDelayMs}ms (${attempt + 1}/${maxRetries})`
         );
         await delay(retryDelayMs);
@@ -172,27 +120,26 @@ class Remote429TTSProvider extends TTSProvider {
     throw new Error('429 TTS retry loop exhausted unexpectedly');
   }
 
-  async _synthesizeSingle(text, outputPath, apiKey429, voicePath) {
-    const voiceBase64 = fs.readFileSync(voicePath).toString('base64');
+  async _synthesizeShort(text, outputPath, apiKey, voiceId) {
     const body = JSON.stringify({
       text,
-      voice: voiceBase64,
+      voice_id: voiceId,
       language: 'en',
       exaggeration: 0.5,
       format: 'mp3',
     });
 
     await new Promise((resolve, reject) => {
-      const url = new URL(TTS_ENDPOINT);
+      const url = new URL(`${get429BaseUrl()}/v1/tts/synthesize`);
       const lib = url.protocol === 'https:' ? https : http;
       const req = lib.request(
         {
           hostname: url.hostname,
           port: url.port || (url.protocol === 'https:' ? 443 : 80),
-          path: url.pathname,
+          path: `${url.pathname}${url.search}`,
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${apiKey429}`,
+            Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(body),
           },
@@ -200,7 +147,7 @@ class Remote429TTSProvider extends TTSProvider {
         (res) => {
           if (res.statusCode < 200 || res.statusCode >= 300) {
             res.resume();
-            return reject(make429ApiError(`429 TTS API failed with HTTP ${res.statusCode}`, res.statusCode));
+            return reject(make429ApiError(`429 TTS HTTP ${res.statusCode}`, res.statusCode));
           }
           const out = fs.createWriteStream(outputPath);
           res.pipe(out);
@@ -219,17 +166,113 @@ class Remote429TTSProvider extends TTSProvider {
     return outputPath;
   }
 
-  async _concatAudioFiles(files, outputPath, tmpDir) {
-    const listPath = path.join(tmpDir, 'concat.txt');
-    fs.writeFileSync(listPath, files.map(file => `file '${escapeConcatPath(file)}'`).join('\n'));
-    await execFileAsync('ffmpeg', [
-      '-y',
-      '-f', 'concat',
-      '-safe', '0',
-      '-i', listPath,
-      '-c', 'copy',
-      outputPath,
-    ]);
+  async _synthesizeLong(text, outputPath, apiKey, voiceId) {
+    const body = JSON.stringify({
+      text,
+      voice_id: voiceId,
+      language: 'en',
+      exaggeration: 0.5,
+    });
+
+    const audioChunks = [];
+
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const fail = (err) => {
+        if (settled) return;
+        settled = true;
+        reject(err);
+      };
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+
+      const url = new URL(`${get429BaseUrl()}/v1/tts/long`);
+      const lib = url.protocol === 'https:' ? https : http;
+      const req = lib.request(
+        {
+          hostname: url.hostname,
+          port: url.port || (url.protocol === 'https:' ? 443 : 80),
+          path: `${url.pathname}${url.search}`,
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(body),
+            Accept: 'text/event-stream',
+          },
+        },
+        (res) => {
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            res.resume();
+            return fail(make429ApiError(`429 TTS long-form HTTP ${res.statusCode}`, res.statusCode));
+          }
+
+          let buf = '';
+          res.setEncoding('utf8');
+
+          res.on('data', (chunk) => {
+            buf += chunk;
+            const parts = buf.split('\n\n');
+            buf = parts.pop();
+
+            for (const part of parts) {
+              const dataLines = part
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line.startsWith('data:'))
+                .map(line => line.slice(5).trim());
+              if (!dataLines.length) continue;
+
+              let event;
+              try {
+                event = JSON.parse(dataLines.join('\n'));
+              } catch {
+                continue;
+              }
+
+              if (event.type === 'chunk') {
+                const audio = Buffer.from(event.audio || '', 'base64');
+                audioChunks.push(audio);
+                console.log(
+                  `[tts:429] chunk ${event.chunk_index + 1}/${event.total_chunks} ` +
+                  `(${(audio.length / 1024).toFixed(0)} KB) elapsed ${event.elapsed_ms}ms`
+                );
+              } else if (event.type === 'done') {
+                const usage = event.usage || {};
+                console.log(
+                  `[tts:429] done - ${usage.chunks ?? audioChunks.length} chunks, ` +
+                  `${usage.input_chars ?? text.length} chars, ${event.elapsed_ms}ms`
+                );
+              } else if (event.type === 'error') {
+                fail(make429ApiError(
+                  `429 TTS long-form error on chunk ${event.chunk_index}: ${event.error}`,
+                  event.status_code || 500
+                ));
+              }
+            }
+          });
+
+          res.on('end', done);
+          res.on('aborted', () => fail(new Error('429 TTS long-form response ended before audio generation completed')));
+          res.on('error', fail);
+        }
+      );
+
+      req.setTimeout(0);
+      req.on('error', fail);
+      req.write(body);
+      req.end();
+    });
+
+    if (audioChunks.length === 0) {
+      throw new Error('429 TTS long-form returned no audio chunks');
+    }
+
+    fs.writeFileSync(outputPath, Buffer.concat(audioChunks));
+    return outputPath;
   }
 }
 
