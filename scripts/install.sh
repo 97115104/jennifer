@@ -4,6 +4,9 @@
 
 set -euo pipefail
 JENNIFER_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+MIN_NODE_MAJOR=22
+MIN_NODE_MINOR=5
+NODE_INSTALL_MAJOR=22
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 ok()   { echo -e "${GREEN}✅  $*${NC}"; }
@@ -79,6 +82,125 @@ pkg_install() {
   esac
 }
 
+ensure_sudo() {
+  if [ "$(id -u)" -eq 0 ]; then
+    return 0
+  fi
+  if ! command -v sudo &>/dev/null; then
+    err "sudo is required to install system packages on $DISTRO, but sudo was not found."
+  fi
+  info "Administrator access is required to install system packages; sudo may prompt for your password."
+  sudo -v
+}
+
+node_version() {
+  command -v node &>/dev/null || return 1
+  node -e "process.stdout.write(process.versions.node)" 2>/dev/null
+}
+
+node_meets_minimum() {
+  command -v node &>/dev/null || return 1
+
+  local major minor
+  major="$(node -e "process.stdout.write(process.versions.node.split('.')[0])" 2>/dev/null)" || return 1
+  minor="$(node -e "process.stdout.write(process.versions.node.split('.')[1])" 2>/dev/null)" || return 1
+
+  [ "$major" -gt "$MIN_NODE_MAJOR" ] || {
+    [ "$major" -eq "$MIN_NODE_MAJOR" ] && [ "$minor" -ge "$MIN_NODE_MINOR" ]
+  }
+}
+
+load_nvm() {
+  local nvm_dir="${NVM_DIR:-$HOME/.nvm}"
+  if [ -s "$nvm_dir/nvm.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$nvm_dir/nvm.sh"
+    return 0
+  fi
+  return 1
+}
+
+install_node_with_nvm_if_available() {
+  load_nvm || return 1
+  command -v nvm &>/dev/null || return 1
+
+  info "Installing Node.js ${NODE_INSTALL_MAJOR}.x with nvm..."
+  nvm install "$NODE_INSTALL_MAJOR"
+  nvm alias default "$NODE_INSTALL_MAJOR" >/dev/null
+  nvm use "$NODE_INSTALL_MAJOR" >/dev/null
+  hash -r 2>/dev/null || true
+  node_meets_minimum
+}
+
+install_or_upgrade_node() {
+  local current="not found"
+  current="$(node_version 2>/dev/null || true)"
+  [ -n "$current" ] || current="not found"
+
+  if [ "$current" = "not found" ]; then
+    info "Installing Node.js ${NODE_INSTALL_MAJOR}.x..."
+  else
+    warn "Node.js v${current} is older than required v${MIN_NODE_MAJOR}.${MIN_NODE_MINOR}+."
+    info "Upgrading Node.js automatically..."
+  fi
+
+  if install_node_with_nvm_if_available; then
+    return 0
+  fi
+
+  case "$OS" in
+    mac)
+      ensure_homebrew_path || err "Homebrew is required to install Node.js on macOS."
+      if brew list --formula node &>/dev/null; then
+        brew upgrade node || brew reinstall node
+      else
+        brew install node
+      fi
+      local brew_prefix
+      brew_prefix="$(brew --prefix 2>/dev/null || true)"
+      if [ -n "$brew_prefix" ] && [ -x "$brew_prefix/bin/node" ]; then
+        export PATH="$brew_prefix/bin:$PATH"
+      fi
+      ;;
+    arch)
+      ensure_sudo
+      sudo pacman -Syu --noconfirm --needed nodejs npm
+      [ -x /usr/bin/node ] && export PATH="/usr/bin:$PATH"
+      ;;
+    debian)
+      ensure_sudo
+      curl -fsSL "https://deb.nodesource.com/setup_${NODE_INSTALL_MAJOR}.x" | sudo -E bash -
+      sudo apt-get install -y nodejs
+      [ -x /usr/bin/node ] && export PATH="/usr/bin:$PATH"
+      ;;
+    *)
+      err "Install Node.js v${MIN_NODE_MAJOR}.${MIN_NODE_MINOR}+ from https://nodejs.org and re-run."
+      ;;
+  esac
+
+  hash -r 2>/dev/null || true
+}
+
+ensure_nodejs() {
+  if ! node_meets_minimum; then
+    install_or_upgrade_node
+  fi
+
+  if ! node_meets_minimum; then
+    local current="not found"
+    current="$(node_version 2>/dev/null || true)"
+    [ -n "$current" ] || current="not found"
+    err "Node.js v${MIN_NODE_MAJOR}.${MIN_NODE_MINOR}+ is still not active (found ${current}). Check PATH and re-run."
+  fi
+
+  ok "Node.js v$(node_version)"
+
+  if ! command -v npm &>/dev/null; then
+    err "npm not found after installing Node.js. Reinstall Node.js ${NODE_INSTALL_MAJOR}.x with npm included, then re-run."
+  fi
+  ok "npm $(npm --version)"
+}
+
 echo ""
 echo "  ╔══════════════════════════════╗"
 echo "  ║   Jennifer — Installer       ║"
@@ -140,31 +262,7 @@ if [[ "$OS" == "mac" ]]; then
 fi
 
 # ─── Node.js ─────────────────────────────────────────────────────────────────
-if ! command -v node &>/dev/null; then
-  info "Installing Node.js..."
-  if [[ "$OS" == "mac" ]]; then
-    brew install node
-  elif [[ "$DISTRO" == "arch" ]]; then
-    pkg_install nodejs npm
-  elif [[ "$DISTRO" == "debian" ]]; then
-    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-    sudo apt-get install -y nodejs
-  else
-    err "Install Node.js 22.5+ from https://nodejs.org and re-run"
-  fi
-fi
-NODE_VERSION=$(node -e "process.stdout.write(process.versions.node)")
-NODE_MAJOR=$(node -e "process.stdout.write(process.versions.node.split('.')[0])")
-NODE_MINOR=$(node -e "process.stdout.write(process.versions.node.split('.')[1])")
-if [ "$NODE_MAJOR" -lt 22 ] || { [ "$NODE_MAJOR" -eq 22 ] && [ "$NODE_MINOR" -lt 5 ]; }; then
-  err "Node.js v22.5+ required (found v${NODE_VERSION}). Install with: nvm install 22 && nvm use 22"
-fi
-ok "Node.js $(node --version)"
-
-if ! command -v npm &>/dev/null; then
-  err "npm not found. Reinstall Node.js 22.5+ with npm included, then re-run."
-fi
-ok "npm $(npm --version)"
+ensure_nodejs
 
 # ─── ffmpeg ──────────────────────────────────────────────────────────────────
 if ! command -v ffmpeg &>/dev/null; then
