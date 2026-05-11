@@ -196,8 +196,12 @@ fi
 echo ""
 info "Installing Node.js packages..."
 cd "$JENNIFER_ROOT"
-npm install --loglevel=error
+npm install --loglevel=error --no-fund --audit=false
 ok "Node.js packages installed"
+
+info "Checking npm package security audit..."
+npm audit --audit-level=high --no-fund
+ok "npm audit passed"
 
 # ─── .env setup ──────────────────────────────────────────────────────────────
 if [ ! -f "$JENNIFER_ROOT/.env" ]; then
@@ -232,8 +236,8 @@ if no_reply "$DL_WHISPER"; then
   info "Downloading Xenova/whisper-base.en..."
   node -e "
 (async () => {
-  const { pipeline } = await import('@xenova/transformers');
-  await pipeline('automatic-speech-recognition', 'Xenova/whisper-base.en', { quantized: true });
+  const { pipeline } = await import('@huggingface/transformers');
+  await pipeline('automatic-speech-recognition', 'Xenova/whisper-base.en', { dtype: 'q8' });
   console.log('Whisper model ready');
 })().catch(e => { console.error('Download failed:', e.message); process.exit(1); });
 "

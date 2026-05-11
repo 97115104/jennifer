@@ -52,7 +52,7 @@ Browser (Chrome)
 ## Features
 
 - **Wake word** — "Ok Jennifer" via Web Speech API (no cloud service)
-- **Local STT** — Whisper via `@xenova/transformers` (~150MB, no API cost)
+- **Local STT** — Whisper via `@huggingface/transformers` (~150MB, no API cost)
 - **Reasoning model** — 429inference.com `gpt-oss` with chain-of-thought
 - **Tool system** — extensible plugin registry; model picks the right tool
 - **Memory variables** — save contacts, URLs, blogs, and reusable values at `/memory`

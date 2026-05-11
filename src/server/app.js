@@ -52,7 +52,8 @@ function createApp(assistant) {
   }));
 
   // Serve Silero VAD web bundle + ONNX runtime files
-  const vadDist = path.join(__dirname, '../../node_modules/@ricky0123/vad-web/dist');
+  const vadRoot = path.dirname(require.resolve('@ricky0123/vad-web/package.json'));
+  const vadDist = path.join(vadRoot, 'dist');
   if (fs.existsSync(vadDist)) {
     app.use('/vad', express.static(vadDist));
     console.log('[app] Serving VAD bundle at /vad/');
@@ -60,9 +61,14 @@ function createApp(assistant) {
     console.warn('[app] @ricky0123/vad-web not found — run npm install');
   }
   // Also serve onnxruntime-web WASM files at /vad/ (needed by vad bundle)
-  const ortDist = path.join(__dirname, '../../node_modules/onnxruntime-web/dist');
-  if (fs.existsSync(ortDist)) {
+  const ortDist = [
+    path.join(vadRoot, 'node_modules/onnxruntime-web/dist'),
+    path.join(__dirname, '../../node_modules/onnxruntime-web/dist'),
+  ].find(candidate => fs.existsSync(candidate));
+  if (ortDist) {
     app.use('/vad', express.static(ortDist));
+  } else {
+    console.warn('[app] onnxruntime-web assets not found — VAD may not start');
   }
 
   // Static files

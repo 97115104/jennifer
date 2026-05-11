@@ -23,9 +23,9 @@ class WhisperProvider extends STTProvider {
 
   async _load() {
     console.log(`[whisper] Loading model: ${this.modelId} (first run downloads ~150MB)`);
-    const { pipeline } = await import('@xenova/transformers');
+    const { pipeline } = await import('@huggingface/transformers');
     this._pipeline = await pipeline('automatic-speech-recognition', this.modelId, {
-      quantized: true,
+      dtype: 'q8',
     });
     console.log('[whisper] Model ready');
   }

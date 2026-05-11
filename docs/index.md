@@ -31,7 +31,7 @@ Jennifer is a locally-hosted AI voice assistant built with Node.js. It:
 | Feature | Details |
 |---------|---------|
 | Wake word | "Ok Jennifer" via Web Speech API |
-| STT | Whisper (local, via `@xenova/transformers`) |
+| STT | Whisper (local, via `@huggingface/transformers`) |
 | Inference | 429inference.com — `gpt-oss` reasoning model |
 | TTS | macOS `say` / Linux `espeak-ng` / 429 Inference voice |
 | Tools | fetch_url, execute_shell, read_file, write_file, send_email |
