@@ -27,7 +27,7 @@ Text response
 Remote429TTSProvider
      │  POST /v1/tts/synthesize { text, voice }
      ▼
-429 Inference Chatterbox Turbo
+429 Inference Voice
      │
      ▼
 MP3 audio
@@ -56,7 +56,7 @@ TTS_PROVIDER=429
 
 - Start Jennifer with `./scripts/deploy-locally.sh`
 - Open [http://localhost:3000/settings](http://localhost:3000/settings)
-- Choose `429 Inference (Chatterbox Turbo)` in the Voice tab
+- Choose `429 Inference` in the Voice tab
 - Record or upload a clean 20-30 second source sample
 - Click `Use` next to the saved source
 

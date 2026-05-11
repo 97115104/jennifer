@@ -57,7 +57,7 @@ Browser (Chrome)
 - **Tool system** — extensible plugin registry; model picks the right tool
 - **Memory variables** — save contacts, URLs, blogs, and reusable values at `/memory`
 - **System TTS** — macOS `say` / Linux `espeak-ng` / Windows SAPI — installed automatically on Linux
-- **429 voice** — Chatterbox Turbo voice through 429 Inference with a saved source sample
+- **429 voice** — voice through 429 Inference with a saved source sample
 - **REST + WebSocket API** — connect any device (Raspberry Pi, mobile, etc.)
 
 ---
