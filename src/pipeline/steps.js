@@ -80,18 +80,38 @@ function deslop(text) {
  * @param {function} [opts.validate]  (output) => true | errorString
  * @param {boolean} [opts.deslop]     Apply deslop rules to text output
  * @param {number} [opts.retries]     How many attempts (default 2)
+ * @param {number} [opts.maxTokens]   Max model output tokens for this generation
+ * @param {number} [opts.temperature] Model temperature for this generation
  * @param {string} [opts.toolHint]    Label shown in UI
+ * @param {function} [opts.skipIf]    (ctx) => true to skip this step
  */
-function aiGenerate({ name, buildPrompt, outputKey, parseJSON = false, validate, deslop: applyDeslop = false, retries = 2, toolHint = null }) {
+function aiGenerate({
+  name,
+  buildPrompt,
+  outputKey,
+  parseJSON = false,
+  validate,
+  deslop: applyDeslop = false,
+  retries = 2,
+  maxTokens = 4096,
+  temperature = 0.85,
+  toolHint = null,
+  skipIf = null,
+}) {
   return {
     name,
     toolHint,
     retries,
-    async execute(ctx) {
+    async execute(ctx, attemptInfo = {}) {
+      if (skipIf?.(ctx)) return { output: 'skipped' };
       if (!ctx._client?.generate) throw new Error('ctx._client.generate() not available — inject InferenceClient into ctx');
 
-      const prompt = typeof buildPrompt === 'function' ? buildPrompt(ctx) : buildPrompt;
-      let raw = await ctx._client.generate(prompt);
+      let prompt = typeof buildPrompt === 'function' ? buildPrompt(ctx) : buildPrompt;
+      if (attemptInfo.previousErrors?.length) {
+        prompt += `\n\nPrevious attempt failed validation:\n${attemptInfo.previousErrors.map((err, i) => `${i + 1}. ${err}`).join('\n')}\n\nRepair the output. Return a complete replacement, not a diff.`;
+      }
+
+      let raw = await ctx._client.generate(prompt, { maxTokens, temperature });
 
       // Strip markdown code fences that models commonly wrap output in
       raw = raw.replace(/^```(?:json|html|markdown|md|javascript|js)?\s*\n?/i, '').replace(/\n?```\s*$/, '').trim();
@@ -136,14 +156,16 @@ function aiGenerate({ name, buildPrompt, outputKey, parseJSON = false, validate,
  * @param {string} opts.outputKey
  * @param {function} [opts.validate]  (resultString) => true | errorString
  * @param {boolean} [opts.optional]  Don't fail pipeline on error
+ * @param {function} [opts.skipIf]    (ctx) => true to skip this step
  */
-function toolCall({ name, tool, buildArgs, outputKey, validate, optional = false }) {
+function toolCall({ name, tool, buildArgs, outputKey, validate, optional = false, skipIf = null }) {
   return {
     name,
     toolHint: tool.name,
     optional,
     retries: 1,
     async execute(ctx) {
+      if (skipIf?.(ctx)) return { [outputKey]: 'skipped', output: 'skipped' };
       const args = typeof buildArgs === 'function' ? buildArgs(ctx) : buildArgs;
       const result = String(await tool.execute(args));
 

@@ -551,6 +551,31 @@ class JenniferApp {
     document.getElementById('transcript-container').scrollTop = 9999;
   }
 
+  _retryPlanStep(stepNum, error, nextAttempt) {
+    const el = this._planStepEls[stepNum - 1];
+    if (!el) return;
+    el.className = 'plan-step active retrying';
+    const body = el.querySelector('.step-body');
+    const r = document.createElement('div');
+    r.className = 'step-result step-retry';
+    const suffix = nextAttempt ? ` Trying pass ${nextAttempt}.` : '';
+    r.textContent = `${String(error || 'Step validation failed').slice(0, 120)}.${suffix}`;
+    body.appendChild(r);
+    document.getElementById('transcript-container').scrollTop = 9999;
+  }
+
+  _errorPlanStep(stepNum, error) {
+    const el = this._planStepEls[stepNum - 1];
+    if (!el) return;
+    el.className = 'plan-step error';
+    const body = el.querySelector('.step-body');
+    const r = document.createElement('div');
+    r.className = 'step-result step-error';
+    r.textContent = String(error || 'Step failed').slice(0, 160);
+    body.appendChild(r);
+    document.getElementById('transcript-container').scrollTop = 9999;
+  }
+
   _finishPlan() {
     if (this._planEl) {
       this._planEl.querySelector('.plan-header').textContent = '✅ Plan complete';
@@ -855,6 +880,14 @@ class JenniferApp {
 
       case 'plan_step_done':
         this._completePlanStep(msg.step, msg.result);
+        break;
+
+      case 'plan_step_retry':
+        this._retryPlanStep(msg.step, msg.error, msg.nextAttempt);
+        break;
+
+      case 'plan_step_error':
+        this._errorPlanStep(msg.step, msg.error);
         break;
 
       case 'plan_complete':

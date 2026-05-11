@@ -12,6 +12,7 @@
   --assistant-bg: #1a1f2e;
   --danger: #e05252;
   --success: #52c47a;
+  --warning: #e8b949;
   --radius: 12px;
 }
 
@@ -421,10 +422,12 @@ h1 {
 
 .plan-step.pending  .step-icon::before { content: '○'; color: var(--text-muted); }
 .plan-step.active   .step-icon::before { content: '◉'; color: var(--accent); }
+.plan-step.retrying .step-icon::before { content: '◉'; color: var(--warning); }
 .plan-step.done     .step-icon::before { content: '●'; color: var(--success); }
 .plan-step.error    .step-icon::before { content: '✕'; color: var(--danger); }
 
 .plan-step.active { color: var(--text); }
+.plan-step.retrying { color: var(--text); }
 .plan-step.done   { color: var(--text-muted); }
 
 .step-body { display: flex; flex-direction: column; gap: 2px; }
@@ -439,6 +442,9 @@ h1 {
   text-overflow: ellipsis;
   max-width: 340px;
 }
+
+.step-retry { color: var(--warning); }
+.step-error { color: var(--danger); }
 
 /* ─── History panel ──────────────────────────────────────────────────────── */
 

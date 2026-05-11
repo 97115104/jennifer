@@ -188,7 +188,7 @@ See [Raspberry Pi docs](https://97115104.github.io/jennifer/raspberry-pi).
 | `TTS_PROVIDER` | `system` | `system` or `429` |
 | `TTS_TIMEOUT_MS` | `0` | Reserved for TTS requests; `0` disables the client timeout |
 | `API_MAX_TOKENS` | `8192` | Maximum model response tokens |
-| `API_TIMEOUT_MS` | `120000` | Inference request timeout in milliseconds |
+| `API_TIMEOUT_MS` | `0` | Inference request timeout in milliseconds; `0` disables the client timeout for long agent jobs |
 | `FETCH_MAX_CHARS` | `50000` | Maximum readable characters returned by one fetch |
 | `FETCH_TIMEOUT_MS` | `45000` | URL fetch timeout in milliseconds |
 | `QUERY_AUDIO_MAX_MB` | `500` | Maximum uploaded query audio size |

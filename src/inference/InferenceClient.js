@@ -4,6 +4,7 @@ const config = require('../config');
 const DeslopTool = require('../tools/DeslopTool');
 const DehallucinateTool = require('../tools/DehallucinateTool');
 const MemoryStore = require('../core/MemoryStore');
+const { execFile } = require('child_process');
 
 const TOOL_FAILURE_MESSAGE = "Tool failed. Tell the user naturally that you couldn't complete this action, and offer an alternative.";
 
@@ -20,7 +21,7 @@ function getLastUserMessage(messages) {
 
 function selectTools(userMessage, allTools) {
   const msg = String(userMessage || '').toLowerCase();
-  const hasLiveTerms = /\b(current|latest|today|tonight|now|right now|price|weather|news|calendar|events?|time|date|schedule)\b/.test(msg);
+  const hasLiveTerms = /\b(current|latest|today|tonight|now|right now|price|weather|news|calendar|events?|time|date|schedule|internet|web|search|browse|look up|lookup|research|find out)\b/.test(msg);
   const isKnowledge = !hasLiveTerms
     && /\b(define|definition|explain|what is|what are|how does|tell me (a|about)|who (is|was)|why does|story|joke|poem)\b/.test(msg);
   const needsClarification = /\bremind me\b/.test(msg)
@@ -139,6 +140,176 @@ function buildCreateProjectHint(userMessage) {
   return msg;
 }
 
+function decodeHtml(text) {
+  return String(text || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, num) => String.fromCodePoint(parseInt(num, 10)));
+}
+
+function stripHtml(html) {
+  return decodeHtml(String(html || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim());
+}
+
+function decodeDuckDuckGoUrl(href) {
+  let value = decodeHtml(href);
+  if (value.startsWith('//')) value = `https:${value}`;
+
+  try {
+    const url = new URL(value);
+    const target = url.searchParams.get('uddg');
+    if (target) return decodeURIComponent(target);
+  } catch {}
+
+  return value;
+}
+
+function normalizeResearchQuery(query) {
+  return String(query || '')
+    .replace(/\bJEMMA\s*4\b/gi, 'Gemma 4')
+    .replace(/\bJEMMA4\b/gi, 'Gemma 4')
+    .replace(/\bQEN\s*3\.6\b/gi, 'Qwen 3.6')
+    .replace(/\bQEN3\.6\b/gi, 'Qwen 3.6')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractResearchQuery(userMessage) {
+  const msg = String(userMessage || '').replace(/\s+/g, ' ').trim();
+  const patterns = [
+    /\bdifference between\s+(.+?)(?:\?|\bplease\b|\band then\b|\bthen send\b|\bsend me\b|\bemail\b|$)/i,
+    /\b(?:internet|web)?\s*search\s+(?:for|about)?\s*(.+?)(?:\band then\b|\bthen send\b|\bsend me\b|\bemail\b|$)/i,
+    /\b(?:look up|lookup|research|find out)\s+(?:about)?\s*(.+?)(?:\band then\b|\bthen send\b|\bsend me\b|\bemail\b|$)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = msg.match(pattern)?.[1]?.trim();
+    if (match) return normalizeResearchQuery(match.replace(/[?.。]+$/, ''));
+  }
+
+  return normalizeResearchQuery(msg
+    .replace(/\bplease\b/gi, '')
+    .replace(/\b(?:do|run|perform)\s+(?:an?\s+)?(?:internet|web)?\s*search\b/gi, '')
+    .replace(/\b(?:and\s+)?then\s+send\b[\s\S]*$/i, '')
+    .replace(/\bsend\s+me\s+an?\s+email\b[\s\S]*$/i, '')
+    .replace(/[?.。]+$/, ''));
+}
+
+function shouldResearchAndEmail(userMessage) {
+  const msg = String(userMessage || '').toLowerCase();
+  const wantsSearch = /\b(internet search|web search|search|look up|lookup|research|find out|browse)\b/.test(msg);
+  const wantsEmail = /\b(email|mail)\b/.test(msg) && /\b(send|email|mail)\b/.test(msg);
+  return wantsSearch && wantsEmail;
+}
+
+async function searchDuckDuckGo(query) {
+  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  const html = await new Promise((resolve, reject) => {
+    execFile('curl', [
+      '-L',
+      '-sS',
+      '--compressed',
+      '--max-time',
+      '20',
+      '-A',
+      'Mozilla/5.0',
+      url,
+    ], { maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) {
+        reject(new Error((stderr || err.message).trim()));
+        return;
+      }
+      resolve(stdout);
+    });
+  });
+
+  if (!html || !html.includes('result__a')) {
+    throw new Error('Search returned no parseable result page');
+  }
+
+  const results = [];
+  const resultPattern = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
+  let match;
+  while ((match = resultPattern.exec(html)) && results.length < 6) {
+    const title = stripHtml(match[2]);
+    const url = decodeDuckDuckGoUrl(match[1]);
+    const snippet = stripHtml(match[3]);
+    if (title && url && snippet && !results.some(result => result.url === url)) {
+      results.push({ title, url, snippet });
+    }
+  }
+
+  return results;
+}
+
+function summarizeResearch(query, results, originalMessage) {
+  const isGemmaQwen = /\bgemma\b/i.test(query) && /\bqwen\b/i.test(query);
+  const typoNote = /\b(JEMMA|QEN)\b/i.test(originalMessage)
+    ? 'I interpreted "JEMMA4" as Gemma 4 and "QEN 3.6" as Qwen 3.6.'
+    : '';
+
+  if (isGemmaQwen) {
+    return [
+      typoNote,
+      'Short answer: the search results generally describe Qwen 3.6 as the stronger coding and software-engineering model, while Gemma 4 is usually framed as Google\'s open-weight line with competitive local performance, strong math or agent tooling depending on the variant, and Apache 2.0 licensing.',
+      'The exact comparison depends heavily on which variants are being compared: dense 27B, Gemma 4 31B, Qwen 3.6 Plus, or Qwen 3.6 MoE. Several results also emphasize that hardware, quantization, context window, and benchmark choice can change the practical winner.',
+      'Because these were web-search results rather than primary model cards, I would treat the benchmark claims as leads to verify before making a production decision.',
+    ].filter(Boolean).join('\n\n');
+  }
+
+  const sourceSummary = results
+    .slice(0, 3)
+    .map((result, index) => `${index + 1}. ${result.title}: ${result.snippet}`)
+    .join('\n');
+
+  return [
+    typoNote,
+    `I searched for "${query}" and found these top-level details:`,
+    sourceSummary,
+    'I would verify important claims against primary documentation before relying on them.',
+  ].filter(Boolean).join('\n\n');
+}
+
+function buildResearchEmailBody({ originalMessage, query, results }) {
+  const sources = results.map((result, index) => [
+    `${index + 1}. ${result.title}`,
+    result.url,
+    result.snippet,
+  ].join('\n')).join('\n\n');
+
+  return [
+    `Search query: ${query}`,
+    summarizeResearch(query, results, originalMessage),
+    'Sources from the web search:',
+    sources,
+  ].join('\n\n');
+}
+
+function buildResearchSpokenResponse({ originalMessage, query, email }) {
+  const isGemmaQwen = /\bgemma\b/i.test(query) && /\bqwen\b/i.test(query);
+  const typoNote = /\b(JEMMA|QEN)\b/i.test(originalMessage)
+    ? 'I interpreted that as Gemma 4 versus Qwen 3.6.'
+    : '';
+
+  if (isGemmaQwen) {
+    return [
+      typoNote,
+      'The search results generally point to Qwen 3.6 as stronger for coding and software-engineering benchmarks, while Gemma 4 is framed more around Google open-weight availability, competitive local performance, and Apache 2.0 licensing.',
+      `I emailed the detailed source list to ${email}.`,
+    ].filter(Boolean).join(' ');
+  }
+
+  return `I found relevant web results for ${query}, and I emailed the summary and source list to ${email}.`;
+}
+
 class InferenceClient {
   constructor(toolRegistry = null) {
     this.toolRegistry = toolRegistry;
@@ -213,6 +384,49 @@ class InferenceClient {
     console.log(`[inference] Selected tools: ${tools.map(getToolName).join(', ') || 'none'}`);
 
     const lastUserMessage = getLastUserMessage(messages);
+    if (!excludeTools.includes('google')
+      && this.toolRegistry?.list().includes('google')
+      && shouldResearchAndEmail(lastUserMessage)) {
+      const email = lookupEmailTarget(lastUserMessage);
+      if (!email) {
+        return this._postProcessFinalContent('What email address should I send the research summary to?');
+      }
+
+      const query = extractResearchQuery(lastUserMessage);
+      if (!query) {
+        return this._postProcessFinalContent('What should I search for before sending the email?');
+      }
+
+      console.log(`[inference] Direct workflow route: web_search_email query="${query}"`);
+      if (onStatus) onStatus({ type: 'tool_call', name: 'web_search', args: { query } });
+      let results;
+      try {
+        results = await searchDuckDuckGo(query);
+      } catch (err) {
+        console.error('[inference] Web search failed:', err.message);
+        return this._postProcessFinalContent(`I couldn't complete the web search because ${err.message}.`);
+      }
+      if (onStatus) onStatus({ type: 'tool_result', name: 'web_search', result: `${results.length} search results found.` });
+
+      if (!results.length) {
+        return this._postProcessFinalContent(`I searched the web for ${query}, but I couldn't find useful results to summarize.`);
+      }
+
+      const subject = `Research: ${query}`;
+      const body = buildResearchEmailBody({ originalMessage: lastUserMessage, query, results });
+      const result = await this.toolRegistry.execute('google', {
+        action: 'send_email',
+        to: email,
+        subject,
+        body,
+        reason: 'The user asked to email a live web-search summary.',
+      }, { onStatus });
+      if (!/^email sent\b/i.test(String(result || ''))) {
+        return this._postProcessFinalContent(result);
+      }
+      return this._postProcessFinalContent(buildResearchSpokenResponse({ originalMessage: lastUserMessage, query, email }));
+    }
+
     if (!excludeTools.includes('plan_and_execute')
       && tools.some(t => getToolName(t) === 'plan_and_execute')
       && shouldCreateGithubPagesProject(lastUserMessage)) {

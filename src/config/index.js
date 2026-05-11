@@ -19,7 +19,7 @@ const config = {
   apiBaseUrl: process.env.API_BASE_URL || 'https://api.429inference.com',
   apiModel: process.env.API_MODEL || 'dynamic',
   apiMaxTokens: readIntEnv('API_MAX_TOKENS', 8192),
-  apiTimeoutMs: readIntEnv('API_TIMEOUT_MS', 120000),
+  apiTimeoutMs: readIntEnv('API_TIMEOUT_MS', 0),
   port: parseInt(process.env.PORT || '3000', 10),
   whisperModel: process.env.WHISPER_MODEL || 'Xenova/whisper-base.en',
   ttsProvider,

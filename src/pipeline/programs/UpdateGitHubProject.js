@@ -38,6 +38,7 @@ function build({ githubTool, googleTool, githubUsername }) {
         action: 'get_file',
         repo: ctx.repoName,
         file_path: 'index.html',
+        reason: 'The user asked to update an existing GitHub Pages project, so the current file must be read first.',
       }),
       outputKey: 'currentHtml',
       validate: (r) => r.includes('<') ? true : 'Could not read index.html: ' + r,
@@ -66,10 +67,13 @@ Output ONLY the HTML. First character: <. Last character: >.
 Zero explanation. Zero markdown. Just the complete improved HTML file.`,
       outputKey: 'html',
       deslop: false,
-      retries: 2,
+      retries: 4,
+      maxTokens: 20000,
+      temperature: 0.55,
       validate: (h) => {
-        if (!h.includes('<!DOCTYPE html>') && !h.trim().startsWith('<html')) return 'Missing DOCTYPE';
-        if (!h.includes('</html>')) return 'Incomplete HTML (no closing </html>)';
+        const trimmed = String(h || '').trim();
+        if (!trimmed.includes('<!DOCTYPE html>') && !trimmed.startsWith('<html')) return 'Missing DOCTYPE';
+        if (!trimmed.endsWith('</html>')) return 'Incomplete HTML (no closing </html> as the final line)';
         if (h.length < 800) return 'HTML too short — likely incomplete';
         return true;
       },
@@ -85,6 +89,7 @@ Zero explanation. Zero markdown. Just the complete improved HTML file.`,
         file_path: 'index.html',
         content: ctx.html,
         message: `Update index.html: ${ctx.improvement_hint || 'improve sophistication and interactivity'}`,
+        reason: 'The user asked for the GitHub Pages project to be updated.',
       }),
       outputKey: 'pushResult',
       validate: (r) => r.includes('File pushed') ? true : 'Push failed: ' + r,
@@ -110,6 +115,7 @@ Zero explanation. Zero markdown. Just the complete improved HTML file.`,
           ``,
           `Made by ${ctx.assistantName || 'Jennifer'}`,
         ].join('\n'),
+        reason: 'The user asked to be notified after the GitHub Pages update.',
       }),
       outputKey: 'emailResult',
       optional: true,

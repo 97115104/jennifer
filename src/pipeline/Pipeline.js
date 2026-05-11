@@ -25,6 +25,7 @@ class Pipeline {
       pipeline: this.name,
       total: n,
       tasks: this.steps.map(s => s.name),
+      todos: this.steps.map((s, i) => ({ id: i + 1, title: s.name, status: 'not_started' })),
     });
 
     for (let i = 0; i < n; i++) {
@@ -36,17 +37,32 @@ class Pipeline {
 
       let result;
       let lastErr;
+      const previousErrors = [];
 
       for (let attempt = 0; attempt < retries; attempt++) {
         try {
-          result = await step.execute(ctx);
+          result = await step.execute(ctx, {
+            attempt: attempt + 1,
+            retries,
+            previousErrors: [...previousErrors],
+          });
           lastErr = null;
           break;
         } catch (err) {
           lastErr = err;
+          previousErrors.push(err.message);
           console.error(`[pipeline] "${step.name}" attempt ${attempt + 1}/${retries} failed: ${err.message}`);
           if (attempt < retries - 1) {
             console.log('[pipeline] Retrying...');
+            onStatus({
+              type: 'plan_step_retry',
+              step: i + 1,
+              total: n,
+              task: step.name,
+              attempt: attempt + 1,
+              nextAttempt: attempt + 2,
+              error: err.message,
+            });
             await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
           }
         }
@@ -57,6 +73,7 @@ class Pipeline {
           console.warn(`[pipeline] Optional step "${step.name}" skipped: ${lastErr.message}`);
           result = { output: `skipped: ${lastErr.message}` };
         } else {
+          onStatus({ type: 'plan_step_error', step: i + 1, total: n, task: step.name, error: lastErr.message });
           throw new Error(`Step "${step.name}" failed after ${retries} attempt(s): ${lastErr.message}`);
         }
       }
