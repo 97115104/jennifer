@@ -154,8 +154,8 @@ function formatForPrompt(entries) {
     'Saved memory entries relevant to the current user request:',
     ...lines,
     'Use these saved values directly. Do not ask the user to provide a URL, email address, or variable value that is listed here.',
-    'If the user asks for the latest content from a saved blog or website, call fetch_url with the saved URL first.',
-    'If the user asks to email a saved contact, call send_email with the saved email address.',
+    'If the user asks for the latest content from a saved blog or website, resolve the saved URL first, then use execute_shell with curl.',
+    'If the user asks to email a saved contact, call google with action send_email and the saved email address.',
   ].join('\n');
 }
 

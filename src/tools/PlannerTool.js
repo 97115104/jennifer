@@ -13,7 +13,7 @@
  */
 
 let _client = null;
-let _tools = {};   // { github, email, fetchUrl, ... }
+let _tools = {};   // { github, google, ... }
 
 // ─── Named program catalog ───────────────────────────────────────────────────
 
@@ -79,13 +79,17 @@ CUSTOM — use when no named program fits:
           type: 'object',
           properties: {
             description: { type: 'string', description: 'What to do in this step — be specific' },
-            tool_hint:   { type: 'string', description: 'Tool to use: github | send_email | fetch_url | execute_shell | write_file | memory_lookup' },
+            tool_hint:   { type: 'string', description: 'Tool to use: github | google | execute_shell | write_file | memory_lookup' },
           },
           required: ['description'],
         },
       },
+      reason: {
+        type: 'string',
+        description: 'One sentence explaining why this requires a live tool call rather than answering from training knowledge',
+      },
     },
-    required: ['complexity_score', 'program'],
+    required: ['complexity_score', 'program', 'reason'],
   },
 
   // Called from index.js after everything is wired up

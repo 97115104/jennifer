@@ -73,8 +73,12 @@ const EmailTool = {
       to: { type: 'string', description: 'Recipient email address' },
       subject: { type: 'string', description: 'Email subject line' },
       body: { type: 'string', description: 'Email body (plain text)' },
+      reason: {
+        type: 'string',
+        description: 'One sentence explaining why this requires a live tool call rather than answering from training knowledge',
+      },
     },
-    required: ['to', 'subject', 'body'],
+    required: ['to', 'subject', 'body', 'reason'],
   },
 
   async execute({ to, subject, body }) {

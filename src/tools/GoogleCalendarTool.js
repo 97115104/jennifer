@@ -38,8 +38,12 @@ const GoogleCalendarTool = {
         type: 'number',
         description: 'Max events to return for list_events (default: 10)',
       },
+      reason: {
+        type: 'string',
+        description: 'One sentence explaining why this requires a live tool call rather than answering from training knowledge',
+      },
     },
-    required: ['action'],
+    required: ['action', 'reason'],
   },
 
   async execute({ action, title, start, end, description, location, max_results = 10 }) {

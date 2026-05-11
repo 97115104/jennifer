@@ -84,7 +84,7 @@ class Settings {
         provider: 'openai-compatible',
         apiUrl:   process.env.API_BASE_URL || 'https://api.429inference.com',
         apiKey:   process.env['429-API-KEY'] || '',
-        model:    process.env.API_MODEL || 'gpt-oss',
+        model:    process.env.API_MODEL || 'dynamic',
         anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
         geminiApiKey:    process.env.GEMINI_API_KEY || '',
       };

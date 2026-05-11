@@ -17,8 +17,12 @@ const ShellTool = {
         type: 'string',
         description: 'Working directory (defaults to home directory)',
       },
+      reason: {
+        type: 'string',
+        description: 'One sentence explaining why this requires a live tool call rather than answering from training knowledge',
+      },
     },
-    required: ['command'],
+    required: ['command', 'reason'],
   },
 
   async execute({ command, cwd }) {

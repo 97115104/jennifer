@@ -84,8 +84,8 @@ fi
 case "${TTS_PROVIDER:-system}" in
   system|429) ;;
   *)
-    echo "❌  Invalid TTS_PROVIDER='${TTS_PROVIDER}'. Use 'system' or '429'."
-    exit 1
+    echo "⚠   Invalid TTS_PROVIDER='${TTS_PROVIDER}'. Falling back to 'system'."
+    export TTS_PROVIDER=system
     ;;
 esac
 
@@ -106,12 +106,25 @@ node "$ROOT/src/server/index.js" &
 SERVER_PID=$!
 
 # Wait for Jennifer to become ready
+READY=0
 for i in $(seq 1 20); do
   if curl -s "http://localhost:$PORT/api/health" &>/dev/null; then
+    READY=1
     break
+  fi
+  if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+    echo "❌  Jennifer server exited during startup."
+    wait "$SERVER_PID"
+    exit 1
   fi
   sleep 0.5
 done
+
+if [ "$READY" -ne 1 ]; then
+  echo "❌  Jennifer did not become ready at http://localhost:$PORT/api/health"
+  kill "$SERVER_PID" 2>/dev/null || true
+  exit 1
+fi
 
 echo ""
 echo "✅  Jennifer is running at http://localhost:$PORT"
@@ -121,10 +134,12 @@ fi
 echo ""
 
 # Open browser
-if [[ "$OSTYPE" == "darwin"* ]]; then
-  open "http://localhost:$PORT"
-elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-  xdg-open "http://localhost:$PORT" 2>/dev/null || true
+if [[ "${JENNIFER_OPEN_BROWSER:-1}" != "0" ]]; then
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    open "http://localhost:$PORT"
+  elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    xdg-open "http://localhost:$PORT" 2>/dev/null || true
+  fi
 fi
 
 echo "   Press Ctrl+C to stop"

@@ -22,8 +22,12 @@ const DeslopTool = {
         type: 'string',
         description: 'The text to clean',
       },
+      reason: {
+        type: 'string',
+        description: 'One sentence explaining why this requires a live tool call rather than answering from training knowledge',
+      },
     },
-    required: ['text'],
+    required: ['text', 'reason'],
   },
 
   execute({ text }) {

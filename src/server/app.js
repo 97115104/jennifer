@@ -111,28 +111,39 @@ function createApp(assistant) {
   app.get('/api/test', async (req, res) => {
     console.log('[test] Testing 429 API connection...');
     const t0 = Date.now();
+    const inferenceSettings = Settings.getInstance().get('inference') || {};
+    const key = inferenceSettings.api429Key || inferenceSettings.apiKey || config.apiKey;
+    const model = inferenceSettings.model || config.apiModel;
+    if (!key) {
+      return res.status(400).json({ status: 'error', error: '429 API key is not configured' });
+    }
+
     try {
       const response = await axios.post(
-        `${config.apiBaseUrl}/v1/chat/completions`,
+        'https://api.429inference.com/v1/chat/completions',
         {
-          model: config.apiModel,
-          messages: [{ role: 'user', content: 'Reply with exactly: API OK' }],
+          model,
+          messages: [
+            { role: 'system', content: 'Return only the final answer. Do not include reasoning.' },
+            { role: 'user', content: 'Reply with exactly: API OK' },
+          ],
           max_tokens: 256,
           temperature: 0,
+          chat_template_kwargs: { enable_thinking: false },
         },
         {
           headers: {
-            Authorization: `Bearer ${config.apiKey}`,
+            Authorization: `Bearer ${key}`,
             'Content-Type': 'application/json',
           },
-          timeout: 15000,
+          timeout: 30000,
         }
       );
       const text = response.data.choices[0].message.content;
       const worker = response.headers['x-429-worker-name'] || 'unknown';
       const tps = response.headers['x-429-tps'] || '?';
       console.log(`[test] ✅ API OK in ${Date.now() - t0}ms | worker=${worker} | tps=${tps} | reply="${text}"`);
-      res.json({ status: 'ok', reply: text, worker, tps, ms: Date.now() - t0, model: config.apiModel });
+      res.json({ status: 'ok', reply: text, worker, tps, ms: Date.now() - t0, model });
     } catch (err) {
       const status = err.response?.status;
       const detail = err.response?.data || err.message;

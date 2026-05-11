@@ -47,8 +47,12 @@ const WebFetchTool = {
         type: 'string',
         description: 'Full URL including protocol (https://...)',
       },
+      reason: {
+        type: 'string',
+        description: 'One sentence explaining why this requires a live tool call rather than answering from training knowledge',
+      },
     },
-    required: ['url'],
+    required: ['url', 'reason'],
   },
 
   async execute({ url }) {

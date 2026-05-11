@@ -18,8 +18,12 @@ const WriteFileTool = {
         type: 'string',
         description: 'Text content to write to the file',
       },
+      reason: {
+        type: 'string',
+        description: 'One sentence explaining why this requires a live tool call rather than answering from training knowledge',
+      },
     },
-    required: ['path', 'content'],
+    required: ['path', 'content', 'reason'],
   },
 
   async execute({ path: filePath, content }) {

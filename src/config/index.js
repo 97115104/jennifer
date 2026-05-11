@@ -17,7 +17,7 @@ const config = {
   apiKey: process.env['429-API-KEY'],
   apiVoiceKey429: process.env['429-VOICE-API-KEY'] || process.env['429-API-VOICE-KEY'] || process.env['429-API-KEY'] || '',
   apiBaseUrl: process.env.API_BASE_URL || 'https://api.429inference.com',
-  apiModel: process.env.API_MODEL || 'gpt-oss',
+  apiModel: process.env.API_MODEL || 'dynamic',
   apiMaxTokens: readIntEnv('API_MAX_TOKENS', 8192),
   apiTimeoutMs: readIntEnv('API_TIMEOUT_MS', 120000),
   port: parseInt(process.env.PORT || '3000', 10),

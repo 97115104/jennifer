@@ -105,8 +105,12 @@ const DehallucinateTool = {
         type: 'string',
         description: 'URL to fetch (url_exists) or "owner/repo" path (github_repo). Not needed for text.',
       },
+      reason: {
+        type: 'string',
+        description: 'One sentence explaining why this requires a live tool call rather than answering from training knowledge',
+      },
     },
-    required: ['claim', 'check_type'],
+    required: ['claim', 'check_type', 'reason'],
   },
 
   async execute({ claim, check_type, target }) {

@@ -35,8 +35,12 @@ const GoogleDocsTool = {
         type: 'string',
         description: 'Sheet tab name (default: "Sheet1")',
       },
+      reason: {
+        type: 'string',
+        description: 'One sentence explaining why this requires a live tool call rather than answering from training knowledge',
+      },
     },
-    required: ['action'],
+    required: ['action', 'reason'],
   },
 
   async execute({ action, title, content, rows, spreadsheet_id, sheet_tab = 'Sheet1' }) {

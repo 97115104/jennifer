@@ -10,15 +10,12 @@ const Remote429TTSProvider = require('../tts/Remote429TTSProvider');
 const DynamicTTSProvider = require('../tts/DynamicTTSProvider');
 const { resolve429VoicePath } = require('../tts/default429Voice');
 const ToolRegistry = require('../tools/ToolRegistry');
-const WebFetchTool = require('../tools/WebFetchTool');
 const ShellTool = require('../tools/ShellTool');
 const MemoryTool = require('../tools/MemoryTool');
 const ReadFileTool = require('../tools/ReadFileTool');
 const WriteFileTool = require('../tools/WriteFileTool');
 const GithubTool = require('../tools/GithubTool');
 const GoogleTool = require('../tools/GoogleTool');
-const DeslopTool = require('../tools/DeslopTool');
-const DehallucinateTool = require('../tools/DehallucinateTool');
 const PlannerTool = require('../tools/PlannerTool');
 const Assistant = require('../core/Assistant');
 const Settings = require('../core/Settings');
@@ -57,15 +54,12 @@ async function main() {
   console.log(`[boot] Active TTS provider: ${settings.get('tts').provider}`);
 
   const tools = new ToolRegistry();
-  tools.register(WebFetchTool);
   tools.register(MemoryTool);
   tools.register(ShellTool);
   tools.register(ReadFileTool);
   tools.register(WriteFileTool);
   tools.register(GithubTool);
   tools.register(GoogleTool);
-  tools.register(DeslopTool);
-  tools.register(DehallucinateTool);
   tools.register(PlannerTool);
 
   const assistant = new Assistant({ sttProvider: stt, ttsProvider: tts, toolRegistry: tools });
@@ -75,7 +69,6 @@ async function main() {
   PlannerTool.inject(assistant.inference, {
     github: GithubTool,
     google: GoogleTool,
-    fetchUrl: WebFetchTool,
   });
   await assistant.initialize();
 

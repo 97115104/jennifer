@@ -4,7 +4,7 @@ const MemoryStore = require('../core/MemoryStore');
 
 const MemoryTool = {
   name: 'memory_lookup',
-  description: 'Look up saved user variables such as contact emails, website URLs, blogs, aliases, and reusable text. Use this before send_email when the recipient is a name, and before fetch_url when the user names a saved website or blog instead of giving an explicit URL.',
+  description: 'Look up saved user variables such as contact emails, website URLs, blogs, aliases, and reusable text. Use this before google action send_email when the recipient is a name, and before execute_shell with curl when the user names a saved website or blog instead of giving an explicit URL.',
   parameters: {
     type: 'object',
     properties: {
@@ -17,8 +17,12 @@ const MemoryTool = {
         enum: ['any', 'email', 'url', 'text'],
         description: 'Optional memory value type to prefer.',
       },
+      reason: {
+        type: 'string',
+        description: 'One sentence explaining why this requires a live tool call rather than answering from training knowledge',
+      },
     },
-    required: ['query'],
+    required: ['query', 'reason'],
   },
 
   async execute({ query, type = 'any' }) {

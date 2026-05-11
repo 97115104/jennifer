@@ -377,8 +377,12 @@ Dates use ISO 8601: "2026-05-10T14:00:00". IDs are returned by create actions.`,
       },
       range:     { type: 'string', description: 'A1 notation range for sheets, e.g. "Sheet1!A1:D10"' },
       sheet_tab: { type: 'string', description: 'Sheet tab name (default: "Sheet1")' },
+      reason: {
+        type: 'string',
+        description: 'One sentence explaining why this requires a live tool call rather than answering from training knowledge',
+      },
     },
-    required: ['action'],
+    required: ['action', 'reason'],
   },
 
   async execute(params, ctx = {}) {

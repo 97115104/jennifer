@@ -45,8 +45,12 @@ const GithubTool = {
         type: 'string',
         description: 'Commit message (for push_file)',
       },
+      reason: {
+        type: 'string',
+        description: 'One sentence explaining why this requires a live tool call rather than answering from training knowledge',
+      },
     },
-    required: ['action'],
+    required: ['action', 'reason'],
   },
 
   async execute({ action, name, repo_name, description, private: isPrivate, repo, repository, file_path, path: filePath, content, message }) {
