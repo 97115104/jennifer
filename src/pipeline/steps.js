@@ -176,12 +176,16 @@ function toolCall({ name, tool, buildArgs, outputKey, validate, optional = false
         result.startsWith('Failed to') ||
         result.toLowerCase().startsWith('error:')
       ) {
+        if (optional) return { [outputKey]: result, output: result };
         throw new Error(result);
       }
 
       if (validate) {
         const verdict = validate(result);
-        if (verdict !== true) throw new Error('Tool result validation: ' + verdict);
+        if (verdict !== true) {
+          if (optional) return { [outputKey]: result, output: String(verdict) };
+          throw new Error('Tool result validation: ' + verdict);
+        }
       }
 
       return { [outputKey]: result, output: result };

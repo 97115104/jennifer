@@ -25,7 +25,7 @@ function cleanForVoice(text) {
   if (!text) return text;
   text = String(text).replace(/<think>[\s\S]*?<\/think>/g, '').trim();
   text = text.replace(/^(INTENT|FACTUAL|LIVE|ACTION|PLAN|CHITCHAT|CLARIFY|KNOWLEDGE_SUFFICIENT|EMIT|THINK):\s*\S+[^\n]*\n?/gim, '');
-  text = text.replace(/^\s*(execute_shell|google|github|memory_lookup|plan_and_execute|read_file|write_file)\s*\([\s\S]*?\)\s*$/gim, '');
+  text = text.replace(/^\s*(execute_shell|google|github|browser|memory_lookup|plan_and_execute|read_file|write_file)\s*\([\s\S]*?\)\s*$/gim, '');
   return text.trim();
 }
 
@@ -147,7 +147,9 @@ class OpenAIAdapter {
         temperature: 0.7,
         max_tokens: this.maxTokens,
       };
-      if (this._supportsThinkingMode()) {
+      if (this._is429Inference()) {
+        body.think = true;
+      } else if (this._supportsChatTemplateThinking()) {
         body.chat_template_kwargs = { enable_thinking: true };
       }
       if (toolsForRound.length > 0) {
@@ -219,8 +221,12 @@ class OpenAIAdapter {
     }
   }
 
-  _supportsThinkingMode() {
-    return /429inference\.com/i.test(this.apiUrl || '') || /qwen/i.test(this.model || '');
+  _is429Inference() {
+    return /429inference\.com/i.test(this.apiUrl || '');
+  }
+
+  _supportsChatTemplateThinking() {
+    return /qwen/i.test(this.model || '');
   }
 
   async generate(messages, { maxTokens = 4096, temperature = 0.85 } = {}) {
@@ -229,8 +235,12 @@ class OpenAIAdapter {
       messages,
       temperature,
       max_tokens: maxTokens,
-      chat_template_kwargs: { enable_thinking: false },
     };
+    if (this._is429Inference()) {
+      body.think = false;
+    } else if (this._supportsChatTemplateThinking()) {
+      body.chat_template_kwargs = { enable_thinking: false };
+    }
     const t0 = Date.now();
     let response;
     try {

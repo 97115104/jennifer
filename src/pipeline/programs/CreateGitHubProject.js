@@ -655,6 +655,7 @@ Output only the README content.`,
         reason: 'The user asked to receive the GitHub Pages link by email.',
       }),
       outputKey: 'emailResult',
+      optional: true,
       validate: (r) => r.toLowerCase().includes('sent') ? true : 'Email send failed: ' + r,
     }),
 

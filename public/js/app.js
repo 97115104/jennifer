@@ -155,6 +155,7 @@ class JenniferApp {
     };
     this.autoSpeak = true;
     this._lastAssistantEl = null;
+    this._approvalCards = new Map();
   }
 
   async init() {
@@ -403,6 +404,7 @@ class JenniferApp {
       read_file: 'Reading file',
       write_file: 'Writing file',
       github: 'Using GitHub',
+      browser: 'Opening browser',
     };
     return labels[name] || `Running ${name || 'tool'}`;
   }
@@ -430,6 +432,102 @@ class JenniferApp {
 
     const suffix = this.toolActivity.count === 1 ? 'time' : 'times';
     this.toolActivity.el.textContent = `${this.toolActivity.label} ${this.toolActivity.count} ${suffix}`;
+    container.scrollTop = container.scrollHeight;
+  }
+
+  _showApprovalRequest(msg) {
+    const container = document.getElementById('transcript-container');
+    const el = document.getElementById('transcript');
+    const card = document.createElement('div');
+    card.className = 'approval-card';
+    card.dataset.approvalId = msg.id;
+
+    const title = document.createElement('div');
+    title.className = 'approval-title';
+    title.textContent = 'Confirm action';
+
+    const summary = document.createElement('div');
+    summary.className = 'approval-summary';
+    summary.textContent = msg.prompt || msg.summary || 'Would you like me to go ahead with that plan?';
+
+    const actions = document.createElement('div');
+    actions.className = 'approval-actions';
+
+    const okBtn = document.createElement('button');
+    okBtn.className = 'btn approval-ok';
+    okBtn.type = 'button';
+    okBtn.textContent = 'OK';
+    okBtn.addEventListener('click', () => {
+      this._send({ type: 'approval_response', id: msg.id, approved: true });
+      this._markApprovalPending(card, 'Approved. Working on it...');
+    });
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn approval-cancel';
+    cancelBtn.type = 'button';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', () => {
+      this._send({ type: 'approval_response', id: msg.id, approved: false });
+      this._markApprovalPending(card, 'Cancelled.');
+    });
+
+    actions.append(okBtn, cancelBtn);
+    card.append(title, summary, actions);
+    el.appendChild(card);
+    this._approvalCards.set(msg.id, card);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  _markApprovalPending(card, text) {
+    card.classList.add('resolved');
+    const buttons = card.querySelectorAll('button');
+    buttons.forEach(btn => { btn.disabled = true; });
+    let status = card.querySelector('.approval-status');
+    if (!status) {
+      status = document.createElement('div');
+      status.className = 'approval-status';
+      card.appendChild(status);
+    }
+    status.textContent = text;
+  }
+
+  _resolveApprovalRequest(msg) {
+    const card = this._approvalCards.get(msg.id);
+    if (!card) return;
+    this._markApprovalPending(card, msg.approved ? 'Approved. Working on it...' : 'Cancelled.');
+    this._approvalCards.delete(msg.id);
+  }
+
+  _showClientAction(msg) {
+    if (msg.action !== 'open_url' || !msg.url) return;
+
+    const container = document.getElementById('transcript-container');
+    const el = document.getElementById('transcript');
+    const label = msg.label || msg.url;
+
+    let opened = null;
+    try {
+      opened = window.open(msg.url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      console.warn('[jennifer] Browser open failed:', err.message);
+    }
+
+    const card = document.createElement('div');
+    card.className = 'client-action-card';
+
+    const title = document.createElement('div');
+    title.className = 'client-action-title';
+    title.textContent = opened ? `Opened ${label}` : `Open ${label}`;
+
+    const link = document.createElement('a');
+    link.className = 'btn client-action-open';
+    link.href = msg.url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = 'Open';
+
+    card.append(title, link);
+    el.appendChild(card);
     container.scrollTop = container.scrollHeight;
   }
 
@@ -869,6 +967,18 @@ class JenniferApp {
         if (msg.name !== 'plan_and_execute') this._showToolCall(msg.name, msg.args?.action);
         break;
 
+      case 'approval_request':
+        this._showApprovalRequest(msg);
+        break;
+
+      case 'approval_resolved':
+        this._resolveApprovalRequest(msg);
+        break;
+
+      case 'client_action':
+        this._showClientAction(msg);
+        break;
+
       case 'plan_start':
         this._showPlanStart(msg.total, msg.tasks);
         break;
@@ -951,6 +1061,7 @@ class JenniferApp {
   _newChat() {
     this._send({ type: 'reset' });
     document.getElementById('transcript').innerHTML = '';
+    this._approvalCards.clear();
     this._resetToolActivity();
     this._hideTTSProgress();
     this._addNote('New conversation started');

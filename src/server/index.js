@@ -16,6 +16,7 @@ const ReadFileTool = require('../tools/ReadFileTool');
 const WriteFileTool = require('../tools/WriteFileTool');
 const GithubTool = require('../tools/GithubTool');
 const GoogleTool = require('../tools/GoogleTool');
+const BrowserTool = require('../tools/BrowserTool');
 const PlannerTool = require('../tools/PlannerTool');
 const Assistant = require('../core/Assistant');
 const Settings = require('../core/Settings');
@@ -60,6 +61,7 @@ async function main() {
   tools.register(WriteFileTool);
   tools.register(GithubTool);
   tools.register(GoogleTool);
+  tools.register(BrowserTool);
   tools.register(PlannerTool);
 
   const assistant = new Assistant({ sttProvider: stt, ttsProvider: tts, toolRegistry: tools });

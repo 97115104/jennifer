@@ -129,7 +129,7 @@ function createApp(assistant) {
           ],
           max_tokens: 256,
           temperature: 0,
-          chat_template_kwargs: { enable_thinking: false },
+          think: false,
         },
         {
           headers: {
@@ -211,7 +211,9 @@ function attachWebSocket(server, assistant) {
       transcript:  e => send({ type: 'transcript', ...e }),
       response:    e => send({ type: 'response', ...e }),
       tts_progress:e => send({ type: 'tts_progress', ...e }),
-      // tool_event covers: tool_call, tool_result, plan_start, plan_step, plan_step_done, plan_complete
+      approval_request:  e => send({ type: 'approval_request', ...e }),
+      approval_resolved: e => send({ type: 'approval_resolved', ...e }),
+      // tool_event covers: tool_call, tool_result, plan events, and client_action
       tool_event:  e => send({ type: e.type, ...e }),
     };
 
@@ -253,6 +255,23 @@ function attachWebSocket(server, assistant) {
           }
         } catch (err) {
           console.error(`[ws:${id}] ✗ processText error:`, err.message);
+          send({ type: 'error', message: err.message });
+        }
+      }
+
+      if (msg.type === 'approval_response') {
+        console.log(`[ws:${id}] ← approval_response: id=${msg.id || '?'} approved=${!!msg.approved}`);
+        try {
+          const result = await assistant.respondToApproval({ id: msg.id, approved: !!msg.approved });
+          if (result.audioPath && fs.existsSync(result.audioPath)) {
+            const audioData = fs.readFileSync(result.audioPath).toString('base64');
+            const audioSize = (audioData.length * 0.75 / 1024).toFixed(1);
+            fs.unlink(result.audioPath, () => {});
+            console.log(`[ws:${id}] → sending audio response: ~${audioSize}KB`);
+            send({ type: 'audio', data: audioData, mimeType: 'audio/mpeg' });
+          }
+        } catch (err) {
+          console.error(`[ws:${id}] ✗ approval_response error:`, err.message);
           send({ type: 'error', message: err.message });
         }
       }

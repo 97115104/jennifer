@@ -35,8 +35,12 @@ function docToText(doc) {
 
 function handleGoogleError(err, service, action) {
   const status = err.response?.status || err.code;
-  const detail = err.response?.data?.error?.message || err.message;
+  const errorCode = err.response?.data?.error;
+  const detail = err.response?.data?.error?.message || err.response?.data?.error_description || err.message;
   console.error(`[google/${service}] Error (${action}): ${detail}`);
+  if (errorCode === 'invalid_grant' || /invalid_grant/i.test(detail || '')) {
+    return 'Google authorization expired — disconnect and reconnect Google in /settings to authorize Google access again.';
+  }
   if (status === 403 || status === 401) {
     return `Google ${service} permission denied — disconnect and reconnect Google in /settings to authorize ${service} access.`;
   }
@@ -407,6 +411,11 @@ Dates use ISO 8601: "2026-05-10T14:00:00". IDs are returned by create actions.`,
           return await sendEmail(client, { to, subject, body });
         } catch (err) {
           const status = err.response?.status || err.status || err.code;
+          const errorCode = err.response?.data?.error;
+          const detail = err.response?.data?.error_description || err.message || '';
+          if (errorCode === 'invalid_grant' || /invalid_grant/i.test(detail)) {
+            return 'Google authorization expired — disconnect and reconnect Google in /settings to authorize Gmail again.';
+          }
           if (status === 403 || err.message?.includes('Insufficient Permission')) {
             return 'Gmail permission denied — disconnect and reconnect Google in /settings to re-authorize Gmail.';
           }

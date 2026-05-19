@@ -303,6 +303,73 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
+.approval-card,
+.client-action-card {
+  width: 100%;
+  background: rgba(232,185,73,0.08);
+  border: 1px solid rgba(232,185,73,0.24);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 8px 0 12px;
+}
+
+.client-action-card {
+  background: rgba(82,196,122,0.08);
+  border-color: rgba(82,196,122,0.24);
+}
+
+.approval-title,
+.client-action-title {
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 650;
+  margin-bottom: 5px;
+}
+
+.approval-summary {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.approval-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.approval-card .btn,
+.client-action-card .btn {
+  padding: 7px 13px;
+  font-size: 0.8rem;
+  border-radius: 7px;
+}
+
+.approval-ok,
+.client-action-open {
+  background: var(--success);
+  color: #07140b;
+  border: 1px solid transparent;
+  text-decoration: none;
+}
+
+.approval-cancel {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.approval-status {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin-top: 8px;
+}
+
+.approval-card.resolved .approval-actions {
+  opacity: 0.65;
+}
+
 .actions {
   display: flex;
   gap: 10px;

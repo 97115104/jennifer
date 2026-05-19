@@ -159,7 +159,11 @@ CUSTOM — use when no named program fits:
       );
 
       const pagesNote = result.pagesUrl ? ` — live at ${result.pagesUrl} (ready in ~1 min)` : '';
-      return `Created "${result.concept?.title}" at ${result.repoUrl}${pagesNote} — email sent to ${email}.`;
+      const emailResult = String(result.emailResult || '');
+      const emailNote = /\bsent\b/i.test(emailResult)
+        ? ` — email sent to ${email}.`
+        : ` — email not sent: ${emailResult || 'notification step did not complete'}.`;
+      return `Created "${result.concept?.title}" at ${result.repoUrl}${pagesNote}${emailNote}`;
     } catch (err) {
       console.error('[planner] create_github_project pipeline failed:', err.message);
       return `Project creation failed: ${err.message}`;

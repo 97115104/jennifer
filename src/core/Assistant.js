@@ -35,6 +35,132 @@ function getAssistantName() {
   }
 }
 
+function isApprovalYes(text) {
+  const msg = String(text || '').trim().toLowerCase();
+  if (!msg) return false;
+  const assistantName = getAssistantName().toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (new RegExp(`^ok(?:ay)?\\s+${assistantName}[.! ]*$`).test(msg)) return false;
+  return /^(yes|yeah|yep|yup|ok|okay|sure|confirm|confirmed|approve|approved|do it|go ahead|please do|sounds good|that works|affirmative)([.! ]*)$/.test(msg)
+    || /\b(yes|yeah|yep|yup|ok|okay|sure|go ahead|do it|please do|sounds good|approved)\b/.test(msg);
+}
+
+function isApprovalNo(text) {
+  const msg = String(text || '').trim().toLowerCase();
+  if (!msg) return false;
+  return /^(no|nope|nah|cancel|stop|do not|don't|dont|never mind|nevermind)([.! ]*)$/.test(msg)
+    || /\b(cancel|stop|never mind|nevermind|do not|don't|dont)\b/.test(msg);
+}
+
+function requiresApproval(text) {
+  const msg = String(text || '').toLowerCase();
+  const hasWriteVerb = /\b(create|make|build|send|email|mail|schedule|add|invite|update|delete|push|commit|publish|enable|write|save)\b/.test(msg);
+  const hasExternalTarget = /\b(github|repo|repository|pages|email|mail|gmail|calendar|invite|event|doc|docs|sheet|sheets|google)\b/.test(msg);
+  return hasWriteVerb && hasExternalTarget;
+}
+
+function buildApprovalSummary(text) {
+  const msg = String(text || '').toLowerCase();
+  if (/\b(github|repo|repository|pages)\b/.test(msg) && /\b(email|mail)\b/.test(msg)) {
+    return 'I can create or update the GitHub project, publish the Pages link, and send the email';
+  }
+  if (/\b(github|repo|repository|pages)\b/.test(msg)) {
+    return 'I can use GitHub to complete the requested repository action';
+  }
+  if (/\b(calendar|invite|event|schedule)\b/.test(msg)) {
+    return 'I can create or change the requested Google Calendar event';
+  }
+  if (/\b(email|mail|gmail)\b/.test(msg)) {
+    return 'I can send the requested email';
+  }
+  if (/\b(doc|docs|sheet|sheets|google)\b/.test(msg)) {
+    return 'I can use the connected Google account to complete the requested action';
+  }
+  return 'I can complete the requested external action';
+}
+
+function lookupDefaultApprovalEmail() {
+  try {
+    const entries = MemoryStore.list().filter(entry => entry.type === 'email');
+    const preferredKeys = ['x', 'me', 'my email', 'self', 'myself', 'primary', 'personal', 'user'];
+    const preferred = entries.find(entry => {
+      const names = [entry.key, ...(entry.aliases || [])].map(value => String(value || '').trim().toLowerCase());
+      return preferredKeys.some(key => names.includes(key));
+    });
+    if (preferred?.value) return preferred.value;
+    if (entries.length === 1) return entries[0].value;
+  } catch {}
+
+  try {
+    return Settings.getInstance().get('google')?.email || null;
+  } catch {
+    return null;
+  }
+}
+
+function lookupApprovalEmailTarget(text) {
+  const msg = String(text || '');
+  const directEmail = msg.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i)?.[0];
+  if (directEmail) return directEmail;
+
+  const aliases = [
+    ...Array.from(msg.matchAll(/\b(?:to|at)\s+([A-Z0-9._-]{1,64})\b/gi)).map(match => match[1]),
+    msg.match(/\bsend\s+([A-Z0-9._-]{1,64})\s+(?:an?\s+)?(?:email|mail)\b/i)?.[1],
+  ].filter(Boolean);
+
+  for (const alias of aliases.reverse()) {
+    if (['it', 'me', 'you', 'them', 'this', 'that', 'with'].includes(alias.toLowerCase())) continue;
+    const [match] = MemoryStore.lookup(alias.replace(/[.。]+$/, ''), 'email', 1);
+    if (match?.value) return match.value;
+  }
+
+  if (/\b(send|email|mail)\s+me\b/i.test(msg) || /\b(to me|my email|myself)\b/i.test(msg)) {
+    return lookupDefaultApprovalEmail();
+  }
+
+  return null;
+}
+
+function buildApprovalEmailSubject(text) {
+  const msg = String(text || '');
+  const explicitSubject = msg.match(/\bsubject\s+([\s\S]+?)\s+(?:and\s+)?body\s+/i)?.[1]?.trim();
+  if (explicitSubject) return explicitSubject;
+  if (/\bjoke\b/i.test(msg)) return /\bfun\b/i.test(msg) ? 'A fun joke' : 'A joke';
+  const hint = msg.match(/\b(?:with|about|regarding)\s+([\s\S]+?)\s*$/i)?.[1]?.replace(/[.。!?]+$/, '').trim();
+  if (!hint) return 'A note from Jennifer';
+  return hint.replace(/^(a|an|the)\s+/i, '').replace(/^./, c => c.toUpperCase()).slice(0, 80);
+}
+
+function buildApprovalPrompt(text) {
+  const msg = String(text || '').toLowerCase();
+  if (/\b(github|repo|repository|pages)\b/.test(msg) && /\b(email|mail)\b/.test(msg)) {
+    const to = lookupApprovalEmailTarget(text);
+    const target = to ? ` and email the link to ${to}` : ' and email the link';
+    return `I can create the GitHub repository, publish it with GitHub Pages,${target}. Would you like me to go ahead with that plan?`;
+  }
+
+  if (/\b(send|email|mail)\b/.test(msg) && /\b(email|mail)\b/.test(msg)) {
+    const to = lookupApprovalEmailTarget(text);
+    const subject = buildApprovalEmailSubject(text);
+    const target = to ? ` to ${to}` : '';
+    return `I can send an email${target} with subject "${subject}". Would you like me to go ahead with that plan?`;
+  }
+
+  const summary = buildApprovalSummary(text);
+  return `${summary}. Would you like me to go ahead with that plan?`;
+}
+
+function buildApprovalRequest(text) {
+  if (!requiresApproval(text)) return null;
+  const summary = buildApprovalSummary(text);
+  return {
+    id: uuidv4(),
+    text,
+    summary,
+    prompt: buildApprovalPrompt(text),
+    createdAt: Date.now(),
+  };
+}
+
 function buildSystemPrompt(name = 'Jennifer') {
   return `You are ${name || 'Jennifer'}, a voice AI assistant. You think in jennifer-lang (JLAN) — a structured protocol that makes your routing deterministic and your responses accurate.
 
@@ -93,6 +219,7 @@ TOOL ROUTING (which tool to pick)
   execute_shell    → run shell commands; use for: current date/time, system info, curl to public web pages and APIs
   google           → ALL Google account operations — email, calendar, docs, sheets
   github           → ALL GitHub operations — repos, files, pages
+  browser          → open public websites in the user's browser, including opening a new tab
 
 [context] — resolve stored references:
   memory_lookup    → ALWAYS call BEFORE google(send_email) or execute_shell(curl) when a name or site is referenced without a full address
@@ -152,6 +279,9 @@ EXAMPLES (few-shot reference)
 "Fetch https://example.com."
   ACTION → execute_shell(command="curl -L --max-time 20 'https://example.com'", reason="The user asked to fetch a specific live URL.")
 
+"Open Wordle in a new tab."
+  ACTION → browser({ action: "open_url", url: "https://www.nytimes.com/games/wordle/index.html", label: "Wordle", reason: "The user asked to open Wordle in the browser." })
+
 "Do I have anything on my calendar today?"
   LIVE, gate=NO → google({ action: "list_events", reason: "The user asked for private live calendar data." })
 
@@ -179,6 +309,7 @@ class Assistant extends EventEmitter {
     this.tools = toolRegistry;
     this.inference = new InferenceClient(toolRegistry);
     this.conversation = new Conversation(buildSystemPrompt(getAssistantName()));
+    this.pendingApproval = null;
   }
 
   _messagesForInference(text) {
@@ -193,6 +324,69 @@ class Assistant extends EventEmitter {
     }
 
     return messages;
+  }
+
+  _standaloneMessagesForInference(text) {
+    const messages = this.conversation.getMessages();
+    messages[0] = { role: 'system', content: buildSystemPrompt(getAssistantName()) };
+
+    const memoryMatches = MemoryStore.lookup(text, 'any', 8);
+    const memoryContext = MemoryStore.formatForPrompt(memoryMatches);
+    if (memoryContext) {
+      console.log(`[assistant] Memory context matched: ${memoryMatches.map(entry => `${entry.type}:${entry.key}`).join(', ')}`);
+      messages.splice(1, 0, { role: 'system', content: memoryContext });
+    }
+
+    messages.push({
+      role: 'system',
+      content: 'The user approved the pending external action. Execute the approved request now.',
+    });
+    messages.push({ role: 'user', content: text });
+    return messages;
+  }
+
+  async _emitResponseWithSpeech(responseText, transcript) {
+    this.conversation.addAssistant(responseText);
+    this.emit('response', { text: responseText });
+
+    const ttsProvider = typeof this.tts?.getActiveProvider === 'function'
+      ? this.tts.getActiveProvider()
+      : 'system';
+    const isRemoteVoice = ttsProvider === '429';
+    const ttsStartMessage = isRemoteVoice ? 'Generating 429 voice...' : 'Preparing speech...';
+    this.emit('status', { state: 'speaking', message: ttsStartMessage });
+    this.emit('tts_progress', {
+      provider: ttsProvider,
+      phase: 'start',
+      progress: isRemoteVoice ? 8 : 0,
+      message: ttsStartMessage,
+    });
+
+    const audioPath = path.join(os.tmpdir(), `jennifer_out_${uuidv4()}.mp3`);
+    console.log(`[assistant] Synthesizing TTS -> ${audioPath}`);
+    const t1 = Date.now();
+    try {
+      await this.tts.synthesize(stripMarkdown(responseText), audioPath);
+      const elapsedMs = Date.now() - t1;
+      console.log(`[assistant] TTS done in ${elapsedMs}ms`);
+      this.emit('tts_progress', {
+        provider: ttsProvider,
+        phase: 'ready',
+        progress: 100,
+        message: isRemoteVoice ? '429 voice ready' : 'Speech ready',
+        elapsedMs,
+      });
+    } catch (err) {
+      this.emit('tts_progress', {
+        provider: ttsProvider,
+        phase: 'error',
+        progress: 0,
+        message: `Speech generation failed: ${err.message}`,
+      });
+      throw err;
+    }
+
+    return { transcript, response: responseText, audioPath };
   }
 
   async initialize() {
@@ -235,6 +429,35 @@ class Assistant extends EventEmitter {
 
     this.conversation.addUser(text);
 
+    if (this.pendingApproval) {
+      if (isApprovalYes(text)) {
+        const pending = this.pendingApproval;
+        this.pendingApproval = null;
+        this.emit('approval_resolved', { id: pending.id, approved: true });
+        return this._executeApprovedRequest(pending, text);
+      }
+
+      if (isApprovalNo(text)) {
+        const pending = this.pendingApproval;
+        this.pendingApproval = null;
+        this.emit('approval_resolved', { id: pending.id, approved: false });
+        return this._emitResponseWithSpeech('Okay, I will not go ahead with that plan.', text);
+      }
+
+      return this._emitResponseWithSpeech('Please say yes or okay to approve that plan, or say cancel to stop it.', text);
+    }
+
+    const approval = buildApprovalRequest(text);
+    if (approval) {
+      this.pendingApproval = approval;
+      this.emit('approval_request', {
+        id: approval.id,
+        summary: approval.summary,
+        prompt: approval.prompt,
+      });
+      return this._emitResponseWithSpeech(approval.prompt, text);
+    }
+
     const t0 = Date.now();
     const responseText = await this.inference.complete(
       this._messagesForInference(text),
@@ -242,53 +465,47 @@ class Assistant extends EventEmitter {
     );
     console.log(`[assistant] Inference complete in ${Date.now() - t0}ms`);
 
-    this.conversation.addAssistant(responseText);
-    this.emit('response', { text: responseText });
+    return this._emitResponseWithSpeech(responseText, text);
+  }
 
-    const ttsProvider = typeof this.tts?.getActiveProvider === 'function'
-      ? this.tts.getActiveProvider()
-      : 'system';
-    const isRemoteVoice = ttsProvider === '429';
-    const ttsStartMessage = isRemoteVoice ? 'Generating 429 voice...' : 'Preparing speech...';
-    this.emit('status', { state: 'speaking', message: ttsStartMessage });
-    this.emit('tts_progress', {
-      provider: ttsProvider,
-      phase: 'start',
-      progress: isRemoteVoice ? 8 : 0,
-      message: ttsStartMessage,
-    });
+  async _executeApprovedRequest(pending, transcript) {
+    this.emit('status', { state: 'thinking', message: 'Working on approved plan...' });
 
-    const audioPath = path.join(os.tmpdir(), `jennifer_out_${uuidv4()}.mp3`);
-    console.log(`[assistant] Synthesizing TTS → ${audioPath}`);
-    const t1 = Date.now();
-    try {
-      await this.tts.synthesize(stripMarkdown(responseText), audioPath);
-      const elapsedMs = Date.now() - t1;
-      console.log(`[assistant] TTS done in ${elapsedMs}ms`);
-      this.emit('tts_progress', {
-        provider: ttsProvider,
-        phase: 'ready',
-        progress: 100,
-        message: isRemoteVoice ? '429 voice ready' : 'Speech ready',
-        elapsedMs,
-      });
-    } catch (err) {
-      this.emit('tts_progress', {
-        provider: ttsProvider,
-        phase: 'error',
-        progress: 0,
-        message: `Speech generation failed: ${err.message}`,
-      });
-      throw err;
+    const t0 = Date.now();
+    const responseText = await this.inference.complete(
+      this._standaloneMessagesForInference(pending.text),
+      { onStatus: (event) => this.emit('tool_event', event) }
+    );
+    console.log(`[assistant] Approved inference complete in ${Date.now() - t0}ms`);
+
+    return this._emitResponseWithSpeech(responseText, transcript);
+  }
+
+  async respondToApproval({ id, approved }) {
+    const pending = this.pendingApproval;
+    const transcript = approved ? 'OK' : 'Cancel';
+    this.emit('transcript', { text: transcript });
+    this.conversation.addUser(transcript);
+
+    if (!pending || (id && pending.id !== id)) {
+      return this._emitResponseWithSpeech('There is no pending plan to approve right now.', transcript);
     }
 
-    return { transcript: text, response: responseText, audioPath };
+    this.pendingApproval = null;
+    this.emit('approval_resolved', { id: pending.id, approved: !!approved });
+
+    if (!approved) {
+      return this._emitResponseWithSpeech('Okay, I will not go ahead with that plan.', transcript);
+    }
+
+    return this._executeApprovedRequest(pending, transcript);
   }
 
   resetConversation() {
     const ConversationHistory = require('./ConversationHistory');
     ConversationHistory.save(this.conversation.getMessages());
     this.conversation.reset(true);
+    this.pendingApproval = null;
     this.emit('status', { state: 'idle', message: 'Conversation reset' });
   }
 }

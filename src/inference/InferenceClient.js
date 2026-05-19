@@ -22,15 +22,19 @@ function getLastUserMessage(messages) {
 function selectTools(userMessage, allTools) {
   const msg = String(userMessage || '').toLowerCase();
   const hasLiveTerms = /\b(current|latest|today|tonight|now|right now|price|weather|news|calendar|events?|time|date|schedule|internet|web|search|browse|look up|lookup|research|find out)\b/.test(msg);
+  const hasExternalAction = /\b(send|email|mail|create|make|build|schedule|add|invite|update|delete|push|commit|publish|enable|write|save)\b/.test(msg)
+    && /\b(email|mail|calendar|event|invite|schedule|github|repo|repository|pages|doc|docs|sheet|sheets|google)\b/.test(msg);
   const isKnowledge = !hasLiveTerms
     && /\b(define|definition|explain|what is|what are|how does|tell me (a|about)|who (is|was)|why does|story|joke|poem)\b/.test(msg);
   const needsClarification = /\bremind me\b/.test(msg)
     && !/\b(at|on|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d|am|pm|a\.m\.|p\.m\.)\b/.test(msg);
 
-  if (isKnowledge || needsClarification) return [];
+  if ((isKnowledge && !hasExternalAction) || needsClarification) return [];
 
   const isGoogle = /\b(email|mail|calendar|event|events|doc|docs|sheet|sheets|schedule)\b/.test(msg);
   const isGitHub = /\b(repo|repository|github|push|commit|project|code)\b/.test(msg);
+  const isBrowser = /\b(open|launch|show|go to|navigate)\b/.test(msg)
+    && /\b(browser|tab|website|site|page|url|wordle|game)\b/.test(msg);
   const isFetch = /\b(fetch|browse|web|page|url|search)\b/.test(msg)
     || /https?:\/\//.test(msg)
     || /\bwww\./.test(msg)
@@ -41,7 +45,7 @@ function selectTools(userMessage, allTools) {
   const isNamedPlan = /\b(create|make|build)\b.*\b(github|repo|repository|project)\b/.test(msg)
     || /\b(improve|update|make)\b.*\b(repo|repository|github|project)\b.*\b(better|sophisticated|feature|add|upgrade)\b/.test(msg);
   const isPlan = isNamedPlan || /\b(and (then|after)|then (send|email|create)|first\b.*\bthen\b)\b/.test(msg);
-  const hasToolIntent = isGoogle || isGitHub || isShell || isFile || isPlan;
+  const hasToolIntent = isGoogle || isGitHub || isBrowser || isShell || isFile || isPlan;
 
   if (!hasToolIntent) return [];
   if (isPlan) {
@@ -53,6 +57,7 @@ function selectTools(userMessage, allTools) {
     const name = getToolName(t);
     if (isGoogle && name === 'google') return true;
     if (isGitHub && name === 'github') return true;
+    if (isBrowser && name === 'browser') return true;
     if (isShell && name === 'execute_shell') return true;
     if (isFile && ['read_file', 'write_file'].includes(name)) return true;
     if (needsMemory && name === 'memory_lookup') return true;
@@ -96,7 +101,98 @@ function lookupEmailTarget(userMessage) {
     const [match] = MemoryStore.lookup(alias.replace(/[.。]+$/, ''), 'email', 1);
     if (match?.value) return match.value;
   }
+
+  if (/\b(send|email|mail)\s+me\b/i.test(msg) || /\b(to me|my email|myself)\b/i.test(msg)) {
+    const defaultEmail = lookupDefaultUserEmail();
+    if (defaultEmail) return defaultEmail;
+  }
+
   return null;
+}
+
+function lookupDefaultUserEmail() {
+  const entries = MemoryStore.list().filter(entry => entry.type === 'email');
+  const preferredKeys = ['x', 'me', 'my email', 'self', 'myself', 'primary', 'personal', 'user'];
+  const preferred = entries.find(entry => {
+    const names = [entry.key, ...(entry.aliases || [])].map(value => String(value || '').trim().toLowerCase());
+    return preferredKeys.some(key => names.includes(key));
+  });
+  if (preferred?.value) return preferred.value;
+
+  if (entries.length === 1) return entries[0].value;
+
+  try {
+    const googleSettings = require('../core/Settings').getInstance().get('google');
+    if (googleSettings?.email) return googleSettings.email;
+  } catch {}
+
+  return null;
+}
+
+function extractEmailBodyFromRequest(userMessage) {
+  const msg = String(userMessage || '').trim();
+  const explicitBody = msg.match(/\bbody\s+([\s\S]+?)\s*$/i)?.[1]?.replace(/[.。]\s*$/, '').trim();
+  if (explicitBody) return explicitBody;
+
+  const saysMatch = msg.match(/\b(?:that says|saying|with the message|message)\s+([\s\S]+?)\s*$/i)?.[1]?.trim();
+  if (saysMatch) return saysMatch.replace(/[.。]\s*$/, '').trim();
+
+  const withMatch = msg.match(/\b(?:with|about|regarding)\s+([\s\S]+?)\s*$/i)?.[1]?.trim();
+  if (withMatch) return withMatch.replace(/[.。]\s*$/, '').trim();
+
+  return '';
+}
+
+function buildJokeBody() {
+  return [
+    'Here is a fun joke:',
+    '',
+    'Why did the developer bring a ladder to the bar?',
+    'Because they heard the drinks were on the house.',
+  ].join('\n');
+}
+
+function normalizeEmailSubject(text) {
+  const cleaned = String(text || '')
+    .replace(/^(a|an|the)\s+/i, '')
+    .replace(/[.。!?]+$/g, '')
+    .trim();
+  if (!cleaned) return '';
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+function buildEmailDraft(userMessage) {
+  const msg = String(userMessage || '');
+  const explicitSubject = msg.match(/\bsubject\s+([\s\S]+?)\s+(?:and\s+)?body\s+/i)?.[1]?.trim();
+  const bodyHint = extractEmailBodyFromRequest(msg);
+  const lowerHint = bodyHint.toLowerCase();
+
+  if (explicitSubject) {
+    const explicitBody = msg.match(/\bbody\s+([\s\S]+?)\s*$/i)?.[1]?.replace(/[.。]\s*$/, '').trim();
+    return {
+      subject: explicitSubject,
+      body: explicitBody || bodyHint || 'Following up from our conversation.',
+    };
+  }
+
+  if (/\bjoke\b/i.test(msg) || /\bjoke\b/i.test(bodyHint)) {
+    return {
+      subject: /\bfun\b/.test(lowerHint) || /\bfun\b/i.test(msg) ? 'A fun joke' : 'A joke',
+      body: buildJokeBody(),
+    };
+  }
+
+  if (bodyHint) {
+    return {
+      subject: normalizeEmailSubject(bodyHint).slice(0, 80) || 'A note from Jennifer',
+      body: `Hi,\n\n${bodyHint}\n\nSent from Jennifer.`,
+    };
+  }
+
+  return {
+    subject: 'A note from Jennifer',
+    body: 'Hi,\n\nI wanted to send you a quick note.\n\nSent from Jennifer.',
+  };
 }
 
 function parseExplicitEmailRequest(userMessage) {
@@ -104,20 +200,17 @@ function parseExplicitEmailRequest(userMessage) {
   if (!/\b(send|email|mail)\b/i.test(msg) || !/\b(email|mail)\b/i.test(msg)) return null;
 
   const to = lookupEmailTarget(msg);
-  const subject = msg.match(/\bsubject\s+([\s\S]+?)\s+(?:and\s+)?body\s+/i)?.[1]?.trim();
-  const body = msg.match(/\bbody\s+([\s\S]+?)\s*$/i)?.[1]?.replace(/[.。]\s*$/, '').trim();
+  const draft = buildEmailDraft(msg);
 
-  if (!to || !subject || !body) {
+  if (!to) {
     return {
       missing: {
-        to: !to,
-        subject: !subject,
-        body: !body,
+        to: true,
       },
     };
   }
 
-  return { to, subject, body };
+  return { to, subject: draft.subject, body: draft.body };
 }
 
 function shouldCreateGithubPagesProject(userMessage) {
@@ -208,6 +301,75 @@ function shouldResearchAndEmail(userMessage) {
   const wantsSearch = /\b(internet search|web search|search|look up|lookup|research|find out|browse)\b/.test(msg);
   const wantsEmail = /\b(email|mail)\b/.test(msg) && /\b(send|email|mail)\b/.test(msg);
   return wantsSearch && wantsEmail;
+}
+
+function parseOpenUrlRequest(userMessage) {
+  const msg = String(userMessage || '');
+  const lower = msg.toLowerCase();
+  if (!/\b(open|launch|show|go to|navigate)\b/.test(lower)) return null;
+
+  if (/\bwordle\b/.test(lower)) {
+    return {
+      url: 'https://www.nytimes.com/games/wordle/index.html',
+      label: 'Wordle',
+    };
+  }
+
+  const directUrl = msg.match(/https?:\/\/[^\s"'<>]+/i)?.[0]
+    || msg.match(/\bwww\.[^\s"'<>]+/i)?.[0];
+  if (directUrl) {
+    return {
+      url: directUrl,
+      label: directUrl.replace(/^https?:\/\//i, '').replace(/\/$/, ''),
+    };
+  }
+
+  return null;
+}
+
+function titleCasePhrase(text) {
+  const cleaned = String(text || '')
+    .replace(/\s+/g, ' ')
+    .replace(/[.?!]+$/, '')
+    .trim();
+  if (!cleaned) return '';
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+function parseRelativeStart(message, now = new Date()) {
+  const msg = String(message || '').toLowerCase();
+  const relative = msg.match(/\b(?:in|for)\s+(\d{1,3})\s*(minutes?|mins?|hours?|hrs?)\s*(?:from now)?\b/)
+    || msg.match(/\b(\d{1,3})\s*(minutes?|mins?|hours?|hrs?)\s+from now\b/);
+  if (!relative) return null;
+
+  const amount = Number(relative[1]);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  const unit = relative[2];
+  const minutes = /^h|^hr/.test(unit) ? amount * 60 : amount;
+  return new Date(now.getTime() + minutes * 60 * 1000);
+}
+
+function parseCalendarCreateRequest(userMessage, now = new Date()) {
+  const msg = String(userMessage || '');
+  const lower = msg.toLowerCase();
+  const wantsCalendarWrite = /\b(create|make|add|schedule|put)\b/.test(lower)
+    && /\b(calendar|invite|event|schedule)\b/.test(lower);
+  if (!wantsCalendarWrite) return null;
+
+  const startDate = parseRelativeStart(msg, now);
+  if (!startDate) return null;
+
+  const titleMatch = msg.match(/\b(?:that tells me to|to remind me to|reminding me to|called|titled|title)\s+(.+?)\s*$/i)
+    || msg.match(/\bto\s+(.+?)\s*$/i);
+  const title = titleCasePhrase(titleMatch?.[1] || 'Calendar event');
+  const endDate = new Date(startDate.getTime() + 30 * 60 * 1000);
+
+  return {
+    title,
+    start: startDate.toISOString(),
+    end: endDate.toISOString(),
+    description: `Created from voice request: ${msg}`,
+  };
 }
 
 async function searchDuckDuckGo(query) {
@@ -384,6 +546,24 @@ class InferenceClient {
     console.log(`[inference] Selected tools: ${tools.map(getToolName).join(', ') || 'none'}`);
 
     const lastUserMessage = getLastUserMessage(messages);
+    const openRequest = parseOpenUrlRequest(lastUserMessage);
+    if (!excludeTools.includes('browser')
+      && this.toolRegistry?.list().includes('browser')
+      && tools.some(t => getToolName(t) === 'browser')
+      && openRequest) {
+      console.log(`[inference] Direct action route: browser open_url ${openRequest.url}`);
+      const result = await this.toolRegistry.execute('browser', {
+        action: 'open_url',
+        url: openRequest.url,
+        label: openRequest.label,
+        reason: 'The user asked to open a website in the browser.',
+      }, { onStatus });
+      if (/^Open request sent:/i.test(String(result || ''))) {
+        return this._postProcessFinalContent(`Opening ${openRequest.label || 'that page'}.`);
+      }
+      return this._postProcessFinalContent(result);
+    }
+
     if (!excludeTools.includes('google')
       && this.toolRegistry?.list().includes('google')
       && shouldResearchAndEmail(lastUserMessage)) {
@@ -444,6 +624,22 @@ class InferenceClient {
           concept_hint: buildCreateProjectHint(lastUserMessage),
         },
         reason: 'The user asked to create a GitHub Pages website and email the link.',
+      }, { onStatus });
+      return this._postProcessFinalContent(result);
+    }
+
+    const calendarRequest = parseCalendarCreateRequest(lastUserMessage);
+    if (!excludeTools.includes('google')
+      && tools.some(t => getToolName(t) === 'google')
+      && calendarRequest) {
+      console.log('[inference] Direct action route: google create_event');
+      const result = await this.toolRegistry.execute('google', {
+        action: 'create_event',
+        title: calendarRequest.title,
+        start: calendarRequest.start,
+        end: calendarRequest.end,
+        description: calendarRequest.description,
+        reason: 'The user asked to create a Google Calendar event.',
       }, { onStatus });
       return this._postProcessFinalContent(result);
     }

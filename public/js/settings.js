@@ -700,9 +700,12 @@ async function validateGoogleServices() {
 
     if (!data.connected) {
       renderServiceRows({});
-    } else if (data.error && !data.services) {
-      showToast('Validation error: ' + data.error, 'error');
-      renderServiceRows({});
+    } else if (data.error) {
+      renderServiceRows(data.services || {});
+      const message = data.error === 'invalid_grant'
+        ? 'Google authorization expired — disconnect and reconnect Google.'
+        : 'Validation error: ' + data.error;
+      showToast(message, 'error');
     } else {
       renderServiceRows(data.services || {});
       const allOk = Object.values(data.services || {}).every(Boolean);
