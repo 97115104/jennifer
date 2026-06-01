@@ -2,8 +2,6 @@
 
 An always-on AI voice assistant. Say "Ok Jennifer" and it does real things.
 
-> **Docs →** [97115104.github.io/jennifer](https://97115104.github.io/jennifer)
-
 ---
 
 ## Quick Start
